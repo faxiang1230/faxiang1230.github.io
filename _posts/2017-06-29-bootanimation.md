@@ -6,7 +6,9 @@ date:       2017-06-29 17:40:45
 author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
 catalog: true
-tags: android bootanimation
+tags:
+  - bootanimation
+  - android
 ---
 # Android开机动画修改
 ## 开机动画的启动

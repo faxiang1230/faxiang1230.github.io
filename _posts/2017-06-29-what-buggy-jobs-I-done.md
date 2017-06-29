@@ -1,12 +1,13 @@
 ---
 layout:     post
-title:      "Android BootAnimation"
-subtitle:   " \"How to create bootanimation.zip\""
+title:      "杂活"
+subtitle:   " \"没啥技术含量\""
 date:       2017-06-29 20:57:45
 author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
 catalog: true
-tags: 杂活
+tags:
+  - 杂活
 ---
 # 我干过的杂活们
 没啥技术含量又总容易忘的东西
