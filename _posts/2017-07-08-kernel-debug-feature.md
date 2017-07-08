@@ -5,10 +5,10 @@ date:       2017-07-08 17:40:45
 author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
 catalog: true
-tags: -kernel
-  -oops
-  -stability
-  -debug
+tags: - kernel
+  - oops
+  - stability
+  - debug
 ---
 # kernel DEBUG feature
 了解kernel现有的一些debug feature的配置可以免除一些额外的修改-编译-再运行时间;

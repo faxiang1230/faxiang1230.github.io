@@ -5,9 +5,9 @@ date:       2017-07-07 23:40:45
 author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
 catalog: true
-tags: -kernel
-  -oops
-  -stability
+tags: - kernel
+  - oops
+  - stability
 ---
 # kernel OOPS  
 ## oops
