@@ -5,7 +5,8 @@ date:       2017-07-08 18:10:45
 author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
 catalog: true
-tags: - kernel
+tags:
+  - kernel
   - qemu
   - debug
 ---
