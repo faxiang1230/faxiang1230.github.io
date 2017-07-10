@@ -123,3 +123,38 @@ CPU和Modem，其他的DSP，他们都是有工作频率的，不同的工作频
 power是比较依赖实践的一个事，可以简单的进行对比测试来缩小问题的范围，然后找到针对性的方法来进一步的debug;
 
 可以尝试从零坐起:先将设备(WIFI，BT，,sensor:light,autorotate,压力，握力)都关闭，集中调试子系统的状态，然后挨个打开设备调试设备的driver（一般比较简单）.
+
+## Android侧的debug手段
+
+- 1.wakeup唤醒源:
+唤醒进入休眠状态下的phone:  
+外部中断事件:例如触摸了手机,手机的sensor工作，都可能导致中断唤醒phone  
+内部中断事件:一般分为ap侧和modem侧，ap侧的一般是定时器，modem侧的基本和协议相关:小区切换啦，信号强度变化啦，周期性尝试切换回home网啦；  
+
+```
+mount –t debugfs none /sys/kernel/debug
+echo 1 > /sys/kernel/debug/clk/debug_suspend
+echo 1 > /sys/module/msm_show_resume_irq/parameters/debug_mask
+echo 4 > /sys/module/wakelock/parameters/debug_mask
+echo 1 > /sys/module/lpm_levels/parameters/debug_mask
+echo 0x16 > /sys/module/smd/parameters/debug_mask
+
+adb dumpsys alarm >alarms.txt
+
+echo 0 > /proc/timer_stats && sleep 10 && echo 1 > /proc/timer_stats &&
+sleep 30 && cat /proc/timer_stats > /data/timer_stats &
+```
+
+- 2.suspend fail:  
+灭屏之后总是suspend过程失败，一般都是有wakeup source问题；其余的很容易通过dmesg来判断问题点.
+
+```
+直接在suspend过程中埋点，打印一些log，特别是wakeup source的打印
+
+/sys/kernel/debug/wakeup_sources
+active_since：自上次激活以来的时间
+
+利用ftrace收集:
+echo "power:wakeup_source_activate power:wakeup_source_deactivate" >
+/sys/kernel/debug/tracing/set_event
+```
