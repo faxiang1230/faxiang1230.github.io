@@ -5,7 +5,8 @@ date:       2017-07-11 21:40:45
 author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
 catalog: true
-tags: - gdb
+tags:
+  - gdb
   - linux
   - panic
 ---
