@@ -40,7 +40,7 @@ zygote进程本身加载系统共用的资源，当fork一个进程时Linux有�
 
 3. fork了一个很重要的进程:system_server
 
-起始就是开启了ProcessState，ServiceManager,然后开启了重要的framework服务:ActivityManager,WindowManager,SurfaceFlinger,MediaService,MountService等等
+起始就是开启了ProcessState，ServiceManager,然后开启了重要的framework服务:ActivityManager,WindowManager,MediaService,MountService等等
 
 总结:
 
