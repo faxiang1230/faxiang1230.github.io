@@ -1,3 +1,15 @@
+---
+layout:     post
+title:      "硬盘速率测试"
+date:       2017-07-26 19:50:45
+author:     "faxiang1230"
+header-img: "img/post-bg-2015.jpg"
+catalog: true
+tags:
+  - benchmark
+  - harddrive
+---
+# 测试硬盘速率
 ## 测量硬盘的写速率
 ```
 使用dd命令来测量服务器的吞吐率（写速度) dd if=/dev/zero of=/tmp/test1.img bs=1G count=1 oflag=dsync  
