@@ -12,3 +12,11 @@ tags:
 ## 快速更换更新源
 ![image](./image/ubuntu-apt-source.png)
 sudo apt-get update
+## 获取软件源码
+```
+lh@server2:~$ which pure-ftpd
+/usr/sbin/pure-ftpd
+lh@server2:~$ dpkg -S /usr/sbin/pure-ftpd
+pure-ftpd: /usr/sbin/pure-ftpd
+lh@server2:~$apt-get source  pure-ftpd
+```
