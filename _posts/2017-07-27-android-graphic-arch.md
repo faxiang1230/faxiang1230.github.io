@@ -6,7 +6,8 @@ author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
 catalog: true
 tags:
-  - work
+  - Android
+  - Graphic
 ---
 # Android Graphic Arch
 Android是现在大多数国人使用的手机上搭载的系统，现在的低头族就是指手机族，不过是中间由部分IOS用户而已.低头族们都在干什么呢，浏览网页，游戏，看视频，听歌，分解动作无非两个：`点击触摸屏`和`查看屏幕`;
