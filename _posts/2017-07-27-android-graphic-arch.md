@@ -55,7 +55,9 @@ android.graphics.Canvas是一个2D图形API也是在开发者中非常流行的A
 我们知道PC上刚开始是只有一个CPU的，后来出现图形界面，然后才有了GPU;而对比ARM发展的历程，也是后来才有专门的GPU，像mali系列;
 CPU和GPU的区别:C:control的意思，更加侧重于控制，附带能力是计算;G是Graphics，而图形学基本上离不开向量，矩阵的运算，GPU算是一种DSP专门来处理类似的数据运算.
 而软件上也反映了这些不同;OPENGL是一种标准的图形接口规范，应用开发者只需要调用这些接口就可以完成绘图，具体怎么做的由厂商各自实现，只需要保证和接口描述保持一致.mesa作为OPENGL的一种流行跨平台实现，里面根据硬件不同的能力选择不同的方式绘制:swrast,而此时驱动是softpipe或者根据LLVM编译出的llvmpipe;
+
 在Android上没有使用OpenGL而是使用了阉割版的GLES，只保留了常见的接口;Mesa也实现了GLES，最新的MESA 17.2实现了GLES 3.2;而Android没有直接使用GLES而是利用EGL作为本地窗口系统和GLES的桥梁,EGL负责处理图形管理、表面/缓冲捆绑、渲染同步及支援使用其他Khronos API进行的高效、加速、混合模式2D和3D渲染;
+
 具体GPU(intel核显,Nvdia,AMD等)的工作需要内核的driver,用户空间设备特定的drm,类似于libdrm-intel,libdrm-amd,还需要MESA中支持相应的GPU，而mesa是比较复杂的，需要依赖drm_gralloc，drm,特别是LLVM，而LLVM的依赖关系更加复杂，略去不表;如此才能较好地发挥GPU的性能.
 
 除了Canvas，开发者主要就是通过OpenGL ES来直接渲染到一个surface中.Android在android.opengl包中提供了OpenGL ES接口，开发者可以通过调用SDK的API；另一个选择是使用NDK中提供的native API.
@@ -81,7 +83,6 @@ CPU和GPU的区别:C:control的意思，更加侧重于控制，附带能力是�
 其他的OpenGL ES app也可以消费这些应用流，例如camera app可以接收一个camera预览图形流。非GL的应用也可以消费这些producer的数据，例如ImageReader类；
 - Window Manager
 
-The Android system service that controls a window, which is a container for views. A window is always backed by a surface. This service oversees lifecycles, input and focus events, screen orientation, transitions, animations, position, transforms, z-order, and many other aspects of a window. The Window Manager sends all of the window metadata to SurfaceFlinger so SurfaceFlinger can use that data to composite surfaces on the display.
 Android系统服务中有以非常重要的系统服务AMS,主要管理window对象，每一个window都包含一些view并且每个window一般有一个surface资源.这个服务监视activity的生命周期，输入，focus事件，屏幕旋转，过渡，动画，位置，转换，z轴排序和其他要素.
 - Hardware Composer
 
@@ -135,7 +136,7 @@ BufferQueue和gralloc:BufferQueue链接图形数据的生产方到接收这些�
 SurfaceFlinger,硬件合成器和虚拟显示：SurfaceFlinger接收多个buffer数据然后合成它们并发送到显示设备中.HWC中使用可用的专用硬件设备用最高效的方式来合成buffer.虚拟显示器能够使合成显示在系统内部可用，例如录屏并通过网络发送这些数据.
 
 Surface,Canvas,SurfaceHolder:一个Surface代表一个buffer队列，被SurfaceFlinger来处理掉.当渲染数据到一个Surface中时，结果存储在buffer中并传递给消费者.Canvas API提供了一个软件实现(有硬件加速支持)直接绘制到一个Surface(底层可以被OpenGL ES支持).任何对象想要处理一个包含SurfaceHolder的View，这些APIs使能获取和设置Surface参数size和format.
-    EGLSurface and OpenGL ES. OpenGL ES (GLES) defines a graphics-rendering API designed to be combined with EGL, a library that knows how to create and access windows through the operating system (to draw textured polygons, use GLES calls; to put rendering on the screen, use EGL calls). This page also covers ANativeWindow, the C/C++ equivalent of the Java Surface class used to create an EGL window surface from native code.
+
 EGLSurface和OpenGL ES:GLES定义了一个图形渲染API并和EGL来配合,并知道通过操作系统如何创建和访问窗口(调用GLES绘制纹理图形;调用EGL来将渲染数据放到屏幕上).EGL中非常重要的一点是将GLES和Android的Window结合起来，就是ANativeWindow(Android NativeWindow),和Java层Surface类等同的C/C++实现，从native代码中创建EGL窗口.
 
 Vulkan:低消耗，跨平台的高性能3D图形API.像GLES，Vulkan提供工具来在应用中创建高质量的，实时的图形.Vulkan的优势在于减少CPU的消耗并支持SPIR-V二进制中间语言.
