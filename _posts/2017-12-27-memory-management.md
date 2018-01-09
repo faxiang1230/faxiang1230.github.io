@@ -56,11 +56,11 @@ early_init_dt_scan_memory(unsigned long node, const char *uname,
 下面就是填充pglist_data和各个zone的数据
 
 ## 页表
-在启动MMU的系统中如何通过虚拟地址找到物理页？MMU中的作用？
-1.MMU中看到的物理地址，所以pgd,pte中存储的都是页物理地址
-2.linux理论上支持4极页表，而32位上一般使用2级页表，64位上使用3级页表
-3.内核的页表在swapper_pg_dir
-4.mm_struct->pgd是虚拟地址，因为处于线性映射，在装入MMU之前会转换为物理地址访问
+在启动MMU的系统中如何通过虚拟地址找到物理页？MMU中的作用？  
+1.MMU中看到的物理地址，所以pgd,pte中存储的都是页物理地址  
+2.linux理论上支持4极页表，而32位上一般使用2级页表，64位上使用3级页表  
+3.内核的页表在swapper_pg_dir  
+4.mm_struct->pgd是虚拟地址，因为处于线性映射，在装入MMU之前会转换为物理地址访问  
 
 ### arm页表
 
