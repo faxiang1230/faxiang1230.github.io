@@ -149,7 +149,7 @@ address_mapping作为内存中的缓存页和inode之间的抽象层，存在一
 块缓存是如何组织的呢?
 
 页缓存的实现?
-在读的过程中，首先去address_mapping中找对应的偏移地址是否有页存在，如果没有的话则分配页，加入到address_mapping中并且真正去读数据。
+在读的过程中，首先去address_mapping中找对应的偏移地址是否有页存在，如果没有的话则分配页，加入到address_mapping中并且真正去读数据。kuaihuanchongle
 当用户空间打开文件时:用户程序最终获取到fd,而在其背后的关系:task_struct->files->file->inode->address_space
 当用户空间读文件数据时，通过VFS->具体的FS->readpages->mpage_readpages,读取硬盘中的内容，
 需要知道源地址和目的地址，即分配页并且知道从哪里读取，分配物理页时内存的功能，而找到目的地址这就纯粹是文件系统的设计问题了，
@@ -159,7 +159,9 @@ address_mapping作为内存中的缓存页和inode之间的抽象层，存在一
 利用了page的数据，private指向第一个buffer_head,buffer_head通过链表组成了一个环,这样就可以根据page遍历所有的buffer_head情况,查询是否需要更新,回写等.
 buffer_head中保存了内存中数据的位置:b_data;指向在后备存储器上的位置:b_bdev,b_blocknr，b_size.
 页缓存和块缓存的交集:
-
+当从块设备中读取整页时，block_read_full_page调用将会首先建立块缓存和页缓存的关联，通过更细粒度的判断来减少无意义的读写动作，如果需要读取整页的话就不再需要块缓冲了，直接调用mpage_readpage,避免无意义的缓冲区操作。
+然后转换为bio操作提交给IO系统，在bio操作完成之后会触发调用bh_end_io_t
+从内存中向块设备中写页时，大部分时候不是整页都需要写，可能只需要写一块，那么就轮到快缓冲了。
 分配页缓存:分配页，然后插入页缓存中:add_to_page_cache
 查找页缓存:find_get_page
 删除页缓存:从页缓存中删除释放回per_cpu_pageset/buddy中
@@ -177,4 +179,5 @@ if(absent(page)) {
 
 ```
 ## 页回收
+直接刷出，写到swap中，简单释放就是页面回收的三种方式，周期性扫描，直接页面回收，主动sync,`/proc/sys/vm/drop_caches`,脏页比例过高是页面回收的触发方式
 ## 缺页异常
