@@ -179,5 +179,56 @@ if(absent(page)) {
 
 ```
 ## 页回收
+两个目标:1.周期性回写数据以保持和后被存储设备上数据一致
+2.当系统缓存中脏页过多时，显示刷出
+
+什么时候变脏?怎么管理脏的inode?数据同步的处理?
+当向缓存页写新的数据时，page和inode就变为脏，过程:`super_block->s_bdi->wb->b_dirty`上
+周期性回写:
+回写周期:
+这个可以通过`/proc/sys/vm/dirty_writeback_centisecs`来控制，单位为百分之一秒
+初始化过程:当初始化super_block的时候会初始化bdi(backing device info),初始化一个work_struct并且形成一个超时机制，触发之后开始处理脏数据bdi_writeback_workfn，在结束的时候重新设置定时器，形成定时刷新。
+控制参数:一个是脏数据足够多，另外一个是时间间隔比较久，两个只要满足一个条件就会被flusher刷出；
+`dirty_background_bytes`
+周期性刷新时，>=dirty_background_bytes时才会开始，和dirty_background_ratio只能有一个生效
+`dirty_background_ratio`
+周期刷新时，脏页>所有可用内存xdirty_background_ratio才会开始
+`dirty_bytes`
+进程产生这么多字节脏页时会开始回写，最小为2个页面大小
+`dirty_expire_centisecs`
+当数据变脏时间大于dirty_expire_centisecs时将会被刷回
+`dirty_ratio`
+一个进程产生>（dirty_ratio x 所有可用内存）时开始自己回写数据
+`dirty_writeback_centisecs`
+周期性回写间隔，单位为百分之一秒
+
+原来的`pdflush`,还有后来的`bdi-default`，`flush-x:y`等都被workqueue方式替代了，每个块设备都有一个writeback的workqueue,开启定时刷新的功能。
+从内核3.6开始关于super_block的`sync_supers`和`write_super`被删掉了，原因是它的实现中包含一个定时器，无论super_block是否需要回写，总会定时唤醒，耗电，被kill掉了;
+
+commit:vfs: kill write_super and sync_supers<f0cd2dbb6cf387c11f87265462e370bb5469299e>
+回写super_block方式是有bdi的回写线程中控制
+
+回写过程:
+
+显示刷出:
+触发显示刷出的过程?
+sync系统调用，umount,分配页面时空闲页面不足
+
+显示刷出和周期性回写的区别?
+
 直接刷出，写到swap中，简单释放就是页面回收的三种方式，周期性扫描，直接页面回收，主动sync,`/proc/sys/vm/drop_caches`,脏页比例过高是页面回收的触发方式
+周期性刷新:
+控制参数:`/proc/sys/vm/dirty_writeback_centisecs`,单位为百分之一秒
+初始化过程:当初始化super_block的时候会初始化bdi(backing device info),初始化一个work_struct并且形成一个超时机制，触发之后开始处理脏数据bdi_writeback_workfn，在结束的时候重新设置定时器，形成定时刷新。
+sync:
+强制所有的脏数据回写，保持和硬盘数据一致
+```
+	wakeup_flusher_threads(0, WB_REASON_SYNC);
+	iterate_supers(sync_inodes_one_sb, NULL);
+	iterate_supers(sync_fs_one_sb, &nowait);
+	iterate_supers(sync_fs_one_sb, &wait);
+	iterate_bdevs(fdatawrite_one_bdev, NULL);
+	iterate_bdevs(fdatawait_one_bdev, NULL);
+```
+sync_inodes_one_sb只是将工作挂在bdi->work_list上，然后
 ## 缺页异常
