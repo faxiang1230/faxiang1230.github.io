@@ -179,5 +179,97 @@ if(absent(page)) {
 
 ```
 ## 页回收
+两个目标:1.周期性回写数据以保持和后被存储设备上数据一致
+2.当系统缓存中脏页过多时，显示刷出
+
+什么时候变脏?怎么管理脏的inode?数据同步的处理?
+当向缓存页写新的数据时，page和inode就变为脏，过程:`super_block->s_bdi->wb->b_dirty`上
+周期性回写:
+回写周期:
+这个可以通过`/proc/sys/vm/dirty_writeback_centisecs`来控制，单位为百分之一秒
+初始化过程:当初始化super_block的时候会初始化bdi(backing device info),初始化一个work_struct并且形成一个超时机制，触发之后开始处理脏数据bdi_writeback_workfn，在结束的时候重新设置定时器，形成定时刷新。
+```
+dirty_background_bytes
+
+Contains the amount of dirty memory at which the background kernel
+flusher threads will start writeback.
+
+Note: dirty_background_bytes is the counterpart of dirty_background_ratio. Only
+one of them may be specified at a time. When one sysctl is written it is
+immediately taken into account to evaluate the dirty memory limits and the
+other appears as 0 when read.
+
+==============================================================
+
+dirty_background_ratio
+
+Contains, as a percentage of total system memory, the number of pages at which
+the background kernel flusher threads will start writing out dirty data.
+
+==============================================================
+
+dirty_bytes
+
+Contains the amount of dirty memory at which a process generating disk writes
+will itself start writeback.
+
+Note: dirty_bytes is the counterpart of dirty_ratio. Only one of them may be
+specified at a time. When one sysctl is written it is immediately taken into
+account to evaluate the dirty memory limits and the other appears as 0 when
+read.
+
+Note: the minimum value allowed for dirty_bytes is two pages (in bytes); any
+value lower than this limit will be ignored and the old configuration will be
+retained.
+
+==============================================================
+
+dirty_expire_centisecs
+
+This tunable is used to define when dirty data is old enough to be eligible
+for writeout by the kernel flusher threads.  It is expressed in 100'ths
+of a second.  Data which has been dirty in-memory for longer than this
+interval will be written out next time a flusher thread wakes up.
+
+==============================================================
+
+dirty_ratio
+
+Contains, as a percentage of total system memory, the number of pages at which
+a process which is generating disk writes will itself start writing out dirty
+data.
+
+==============================================================
+
+dirty_writeback_centisecs
+
+The kernel flusher threads will periodically wake up and write `old' data
+out to disk.  This tunable expresses the interval between those wakeups, in
+100'ths of a second.
+
+Setting this to zero disables periodic writeback altogether.
+```
+回写过程:
+
+显示刷出:
+触发显示刷出的过程?
+sync系统调用，umount,分配页面时空闲页面不足
+
+显示刷出和周期性回写的区别?
+
 直接刷出，写到swap中，简单释放就是页面回收的三种方式，周期性扫描，直接页面回收，主动sync,`/proc/sys/vm/drop_caches`,脏页比例过高是页面回收的触发方式
+周期性刷新:
+控制参数:`/proc/sys/vm/dirty_writeback_centisecs`,单位为百分之一秒
+初始化过程:当初始化super_block的时候会初始化bdi(backing device info),初始化一个work_struct并且形成一个超时机制，触发之后开始处理脏数据bdi_writeback_workfn，在结束的时候重新设置定时器，形成定时刷新。
+sync:
+强制所有的脏数据回写，保持和硬盘数据一致
+```
+	wakeup_flusher_threads(0, WB_REASON_SYNC);
+	iterate_supers(sync_inodes_one_sb, NULL);
+	iterate_supers(sync_fs_one_sb, &nowait);
+	iterate_supers(sync_fs_one_sb, &wait);
+	iterate_bdevs(fdatawrite_one_bdev, NULL);
+	iterate_bdevs(fdatawait_one_bdev, NULL);
+```
+sync_inodes_one_sb只是将工作挂在bdi->work_list上，然后
 ## 缺页异常
