@@ -188,67 +188,26 @@ if(absent(page)) {
 回写周期:
 这个可以通过`/proc/sys/vm/dirty_writeback_centisecs`来控制，单位为百分之一秒
 初始化过程:当初始化super_block的时候会初始化bdi(backing device info),初始化一个work_struct并且形成一个超时机制，触发之后开始处理脏数据bdi_writeback_workfn，在结束的时候重新设置定时器，形成定时刷新。
-```
-dirty_background_bytes
+控制参数:一个是脏数据足够多，另外一个是时间间隔比较久，两个只要满足一个条件就会被flusher刷出；
+`dirty_background_bytes`
+周期性刷新时，>=dirty_background_bytes时才会开始，和dirty_background_ratio只能有一个生效
+`dirty_background_ratio`
+周期刷新时，脏页>所有可用内存xdirty_background_ratio才会开始
+`dirty_bytes`
+进程产生这么多字节脏页时会开始回写，最小为2个页面大小
+`dirty_expire_centisecs`
+当数据变脏时间大于dirty_expire_centisecs时将会被刷回
+`dirty_ratio`
+一个进程产生>（dirty_ratio x 所有可用内存）时开始自己回写数据
+`dirty_writeback_centisecs`
+周期性回写间隔，单位为百分之一秒
 
-Contains the amount of dirty memory at which the background kernel
-flusher threads will start writeback.
+原来的`pdflush`,还有后来的`bdi-default`，`flush-x:y`等都被workqueue方式替代了，每个块设备都有一个writeback的workqueue,开启定时刷新的功能。
+从内核3.6开始关于super_block的`sync_supers`和`write_super`被删掉了，原因是它的实现中包含一个定时器，无论super_block是否需要回写，总会定时唤醒，耗电，被kill掉了;
 
-Note: dirty_background_bytes is the counterpart of dirty_background_ratio. Only
-one of them may be specified at a time. When one sysctl is written it is
-immediately taken into account to evaluate the dirty memory limits and the
-other appears as 0 when read.
+commit:vfs: kill write_super and sync_supers<f0cd2dbb6cf387c11f87265462e370bb5469299e>
+回写super_block方式是有bdi的回写线程中控制
 
-==============================================================
-
-dirty_background_ratio
-
-Contains, as a percentage of total system memory, the number of pages at which
-the background kernel flusher threads will start writing out dirty data.
-
-==============================================================
-
-dirty_bytes
-
-Contains the amount of dirty memory at which a process generating disk writes
-will itself start writeback.
-
-Note: dirty_bytes is the counterpart of dirty_ratio. Only one of them may be
-specified at a time. When one sysctl is written it is immediately taken into
-account to evaluate the dirty memory limits and the other appears as 0 when
-read.
-
-Note: the minimum value allowed for dirty_bytes is two pages (in bytes); any
-value lower than this limit will be ignored and the old configuration will be
-retained.
-
-==============================================================
-
-dirty_expire_centisecs
-
-This tunable is used to define when dirty data is old enough to be eligible
-for writeout by the kernel flusher threads.  It is expressed in 100'ths
-of a second.  Data which has been dirty in-memory for longer than this
-interval will be written out next time a flusher thread wakes up.
-
-==============================================================
-
-dirty_ratio
-
-Contains, as a percentage of total system memory, the number of pages at which
-a process which is generating disk writes will itself start writing out dirty
-data.
-
-==============================================================
-
-dirty_writeback_centisecs
-
-The kernel flusher threads will periodically wake up and write `old' data
-out to disk.  This tunable expresses the interval between those wakeups, in
-100'ths of a second.
-
-Setting this to zero disables periodic writeback altogether.
-```
 回写过程:
 
 显示刷出:
