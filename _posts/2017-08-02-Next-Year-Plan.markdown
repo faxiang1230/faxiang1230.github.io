@@ -6,7 +6,7 @@ date:       2017-08-01 14:40:45
 author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
 catalog: true
-tags: -personal
+tags: - personal
 ---
 
 # 个人现状总结
