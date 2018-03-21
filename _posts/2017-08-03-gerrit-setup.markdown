@@ -171,7 +171,7 @@ http://dev.openthos.org/g/#/VE/r7NPtb5QA8cD1NEp2rdSM8ib327GsATJqDTGrw==$MTAwMDAw
 1.创建新的Group:`developer,test,volunteer,team leader`
 
 2.设置不同group的权限
-![images](./imaegs/gerrit-access.png)  
+![images](../images/gerrit-access.jpg)  
 # Gerrit管理repo
 ## 1.添加仓库到gerrit中
 从上面的配置就可以看出,路径是git,即review-site/git/目录下,所有理论上我们就只需要将库拷贝到

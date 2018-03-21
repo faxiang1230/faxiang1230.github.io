@@ -17,7 +17,7 @@ Android是现在大多数国人使用的手机上搭载的系统，现在的低�
 
 这篇主要是对着google的官方手册进行理解
 
-![image](../images/Linux_kernel_INPUT_OUPUT_evdev_gem_USB_framebuffer.png)
+![image](../images/Linux_kernel_INPUT_OUPUT_evdev_gem_USB_framebuffer.jpg)
 
 盗图一张，没办法，外果仁画得就是好(https://en.wikipedia.org/wiki/Graphical_user_interface);
 
@@ -27,7 +27,7 @@ Android是现在大多数国人使用的手机上搭载的系统，现在的低�
 
 先看google设计的整体框图
 
-![image](../images/ape_fwk_all.png)
+![image](../images/ape_fwk_all.jpg)
 
 最顶层是各种应用，也包括系统应用:SystemUI,StatusBar,Launcher等;
 
@@ -43,7 +43,7 @@ Android是现在大多数国人使用的手机上搭载的系统，现在的低�
 
 上面的都是一些粗浅道理，贻笑大方.
 
-![image](../images/ape_fwk_graphics.png)
+![image](../images/ape_fwk_graphics.jpg)
 
 Android Graphic framework向应用开发者提供了大量的2D/3D图形渲染API,下面通过和厂商的图形设备驱动配合工作来完成整个绘图过程;下面的都是在一个比较高的层次上看这些API;
 
@@ -68,7 +68,7 @@ CPU和GPU的区别:C:control的意思，更加侧重于控制，附带能力是�
 
 下图显示的是图形framework的arch图
 
-![image](../images/ape_fwk_graphics.png)
+![image](../images/ape_fwk_graphics.jpg)
 
 主要的组件描述如下:
 
@@ -93,14 +93,14 @@ Android系统服务中有以非常重要的系统服务AMS,主要管理window对
 图形内存分配(Gralloc:graphics alloc)需要处理图形生产者分配内存请求;而其实存在另外一个问题，gralloc为每一个进程分配内存，而进程是访问虚拟地址的，所以这里有一个非常重要的mapping动作是需要和graphicmapper来一起完成的.
 ## Data flow
 
-![image](../images/graphics_pipeline.png)
+![image](../images/graphics_pipeline.jpg)
 
 左侧的对象是产生渲染之后的图形数据buffer的地方，像home屏幕，状态栏，系统UI.SurfaceFlinger是这个合成器，上面也说了最好使用hwc硬件合成.
 - BufferQueue
 
 BufferQueue将不同Android图形组件间连接了起来。从生产者到消费者中间有一对queue(两个queue，一个位于生产者侧，一个位于消费者侧，没侧都有一个buffer)。一旦生产者确定buffer数据生产完成，SurfaceFlinger得到通知后就会合成输出到显示器上
 
-![image](../images/bufferqueue.png)
+![image](../images/bufferqueue.jpg)
 
 BufferQueue负责传输生产者到消费者那里。像Camera预览，有cameral HAL层或者OPENGL ES游戏产生数据等这样的图形生产者；还有SurfaceFlinger或者其他的显示一个OPENGL ES流的app，例如camera app显示camera视图的.
 
