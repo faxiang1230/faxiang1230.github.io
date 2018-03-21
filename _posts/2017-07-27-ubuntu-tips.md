@@ -10,7 +10,7 @@ tags:
 ---
 # ubuntu使用
 ## 快速更换更新源
-![image](./image/ubuntu-apt-source.png)
+![image](../images/ubuntu-apt-source.png)
 sudo apt-get update
 ## 获取软件源码
 ```
