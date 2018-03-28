@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "Android Graphic Arch"
+title:      "Android Graphic"
 date:       2017-08-01 15:50:45
 author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
@@ -9,17 +9,17 @@ tags:
   - Android
   - Graphic
 ---
-# Android Graphic Arch
-Android是现在大多数国人使用的手机上搭载的系统，现在的低头族就是指手机族，不过是中间由部分IOS用户而已.低头族们都在干什么呢，浏览网页，游戏，看视频，听歌，分解动作无非两个：`点击触摸屏`和`查看屏幕`;
-再来看PC行业中Windows的崛起，也是那年搭载了Windows95之后才流行起来的，中间不得不提的苹果公司，两个公司流行的原因很大一部分是具有良好的图形界面，非编程人员也能使用计算机;
-从这个角度看来，windows之后的几十年没有革命性的变化,无非就是图形漂亮点；
-而对比一下pc和手机，我们发现iphone和android为什么突然间将大部分的功能机淘汰,通过重新定义了一种交互方式，其中一点就是通过触摸屏解放了相当大的空间用来显示，就类似于我们对于电视尺寸的不满足.
+# Android Graphic Overview
+Android是现在大多数国人使用的手机上搭载的系统，也衍生了新的一族:`低头族`，低头族们都在干什么呢，浏览网页，游戏，看视频，听歌，分解动作无非两个：`点击触摸屏`和`查看屏幕`;  
+再来看PC行业中Windows的崛起，也是那年搭载了Windows95之后才流行起来的，中间伴随着和苹果公司的恩怨纠缠，两个公司流行的原因很大一部分是具有良好的图形界面，非编程人员也能使用计算机;  
+从这个角度看来，windows之后的几十年没有革命性的变化,无非就是图形漂亮点.  
+而对比一下pc和手机，我们发现iphone和android为什么突然间将大部分的功能机淘汰,<font color=red>通过重新定义了一种交互方式</font>，其中一点就是通过触摸屏解放了相当大的空间用来显示.
 
 这篇主要是对着google的官方手册进行理解
 
 ![image](../images/Linux_kernel_INPUT_OUPUT_evdev_gem_USB_framebuffer.jpg)
 
-盗图一张，没办法，外果仁画得就是好(https://en.wikipedia.org/wiki/Graphical_user_interface);
+盗图一张，没办法，[外果仁画得就是好](https://en.wikipedia.org/wiki/Graphical_user_interface);
 
 用户和一个设备进行交互的方式:输入，输出，输入是指用户通过鼠标，键盘，触摸屏，摇杆等设备操作，驱动接收到事件向系统上层分发，框架层和app层根据输入事件进行相应的反应，而反应的结果通常是通过显示输出来反映最终的状态；从这个角度上来看输入和输出和用户的体验密切相关;这篇主要讲一些概况的东西
 
@@ -29,7 +29,9 @@ Android是现在大多数国人使用的手机上搭载的系统，现在的低�
 
 ![image](../images/ape_fwk_all.jpg)
 
-最顶层是各种应用，也包括系统应用:SystemUI,StatusBar,Launcher等;
+从上往下，依次称之为:应用层，Java服务层，Native服务层，HAL层，kernel
+
+最顶层是各种普通应用，也包括系统应用:SystemUI,StatusBar,Launcher等;
 
 应用通过Binder和系统的framework进行通信，最典型的是system_server(里面有各个重要的java类服务:AMS,WMS,PMS等)，不过这个不是很明显，都是通过AIDL封装起来了，用户根本不需要知道进程间通信的手段;
 
@@ -39,28 +41,35 @@ Android是现在大多数国人使用的手机上搭载的系统，现在的低�
 
 下面一层就是kernel了，负责管理系统中各个设备，使用户空间程序不必关心设备的寄存器/比特流等具体的实现方式，只需要调用接口即可;
 
-从纵向来看，从上到下是一体的，状态理应是一致的；越往上越不必关心设备的工作原理，越往下越需要对硬件工作机制有所了解;
-
-上面的都是一些粗浅道理，贻笑大方.
+从整个系统层面上来看:
+<font color=red>
+从纵向来看，从上到下是一体的，状态理应是一致的；  
+越往上越不必关心设备的工作原理，越往下越需要对硬件工作机制有所了解;
+</front>
 
 ![image](../images/ape_fwk_graphics.jpg)
 
-Android Graphic framework向应用开发者提供了大量的2D/3D图形渲染API,下面通过和厂商的图形设备驱动配合工作来完成整个绘图过程;下面的都是在一个比较高的层次上看这些API;
+Android Graphic framework向应用开发者提供了大量的`2D/3D`图形渲染API,下面通过和厂商的图形设备驱动配合工作来完成整个绘图过程;
+
+下面的都是在一个比较高的层次上看这些API;
 
 应用开发者在绘图时可以采用两种方式:Canvas和OPENGL，这些需要参考系统级的Android图形组件的arch；
 
-android.graphics.Canvas是一个2D图形API也是在开发者中非常流行的API.Canvas操作绘制所有的android.view.Views.在Android中，Canvas硬件加速是通过OpenGLRenderer图形绘制库来将Canvas操作转换为可以在GPU上执行的OpenGL操作.
-从Android4.0上Canvas硬件加速默认开启.所以之后的Android版本设备强制硬件GPU支持OpenGL ES 2.0。
-硬件加速绘图怎么工作的和软件绘制的区别.
-我们知道PC上刚开始是只有一个CPU的，后来出现图形界面，然后才有了GPU;而对比ARM发展的历程，也是后来才有专门的GPU，像mali系列;
-CPU和GPU的区别:C:control的意思，更加侧重于控制，附带能力是计算;G是Graphics，而图形学基本上离不开向量，矩阵的运算，GPU算是一种DSP专门来处理类似的数据运算.
-而软件上也反映了这些不同;OPENGL是一种标准的图形接口规范，应用开发者只需要调用这些接口就可以完成绘图，具体怎么做的由厂商各自实现，只需要保证和接口描述保持一致.mesa作为OPENGL的一种流行跨平台实现，里面根据硬件不同的能力选择不同的方式绘制:swrast,而此时驱动是softpipe或者根据LLVM编译出的llvmpipe;
+`android.graphics.Canvas`是一个2D图形API也是在开发者中非常流行的API.Canvas操作绘制所有的android.view.Views.在Android中，Canvas硬件加速是通过OpenGLRenderer图形绘制库来将Canvas操作转换为可以在GPU上执行的OpenGL操作.
+从Android4.0上Canvas硬件加速默认开启.所以之后的Android版本设备硬件GPU必须支持OpenGL ES 2.0。  
+
+**硬件加速绘图怎么工作的和软件绘制的区别:**  
+我们知道PC上刚开始是只有一个CPU的，后来出现图形界面，然后才有了GPU;而对比ARM发展的历程，也是后来才有专门的GPU，像mali系列;  
+CPU和GPU的区别:  
+C=control的意思，更加侧重于控制，附带能力是计算;G是Graphics，而图形学基本上离不开向量，矩阵的运算，GPU算是一种DSP专门来处理类似的数据运算.  
+而软件上也反映了这些不同;OPENGL是一种标准的图形接口规范，应用开发者只需要调用这些接口就可以完成绘图，具体怎么做的由厂商各自实现，只需要保证和接口描述保持一致.mesa作为OPENGL的一种流行跨平台实现，里面根据硬件不同的能力选择不同的方式绘制
 
 在Android上没有使用OpenGL而是使用了阉割版的GLES，只保留了常见的接口;Mesa也实现了GLES，最新的MESA 17.2实现了GLES 3.2;而Android没有直接使用GLES而是利用EGL作为本地窗口系统和GLES的桥梁,EGL负责处理图形管理、表面/缓冲捆绑、渲染同步及支援使用其他Khronos API进行的高效、加速、混合模式2D和3D渲染;
 
 具体GPU(intel核显,Nvdia,AMD等)的工作需要内核的driver,用户空间设备特定的drm,类似于libdrm-intel,libdrm-amd,还需要MESA中支持相应的GPU，而mesa是比较复杂的，需要依赖drm_gralloc，drm,特别是LLVM，而LLVM的依赖关系更加复杂，略去不表;如此才能较好地发挥GPU的性能.
 
-除了Canvas，开发者主要就是通过OpenGL ES来直接渲染到一个surface中.Android在android.opengl包中提供了OpenGL ES接口，开发者可以通过调用SDK的API；另一个选择是使用NDK中提供的native API.
+除了Canvas，开发者主要就是通过OpenGL ES来直接渲染到一个surface中.  
+Android在android.opengl包中提供了OpenGL ES接口，开发者可以通过调用SDK的API；另一个选择是使用NDK中提供的native API.
 
 ## Android graphics components
 
@@ -78,7 +87,9 @@ CPU和GPU的区别:C:control的意思，更加侧重于控制，附带能力是�
 
 - 图形流的消费者端:
 
-最常见的图形流消费者是SurfaceFlinger，这个系统服务消耗当前可见的surface然后根据window manager提供的信息将他们合成到一个display buffer中.SurfaceFlinger是唯一能够修改显示内容的服务.SurfaceFlinger使用OpenGL或硬件来做合成的工作.
+最常见的图形流消费者是SurfaceFlinger，这个系统服务消耗当前可见的surface然后根据window manager提供的信息将他们合成到一个`display buffer`中.  
+SurfaceFlinger是唯一能够修改显示内容的服务.  
+SurfaceFlinger使用OpenGL或硬件来做合成的工作.  
 
 其他的OpenGL ES app也可以消费这些应用流，例如camera app可以接收一个camera预览图形流。非GL的应用也可以消费这些producer的数据，例如ImageReader类；
 - Window Manager
@@ -90,12 +101,15 @@ Android系统服务中有以非常重要的系统服务AMS,主要管理window对
 
 硬件合成HAL层还需要做另外的一半工作，需要支持一些事件,其中一个是VSYNC事件，还有是HDMI的插拔事件(当没有专用hwc时就这些事件没准放到了gralloc里面).
 - Gralloc
+
 图形内存分配(Gralloc:graphics alloc)需要处理图形生产者分配内存请求;而其实存在另外一个问题，gralloc为每一个进程分配内存，而进程是访问虚拟地址的，所以这里有一个非常重要的mapping动作是需要和graphicmapper来一起完成的.
 ## Data flow
 
 ![image](../images/graphics_pipeline.jpg)
 
-左侧的对象是产生渲染之后的图形数据buffer的地方，像home屏幕，状态栏，系统UI.SurfaceFlinger是这个合成器，上面也说了最好使用hwc硬件合成.
+左侧的对象是产生渲染之后的图形数据buffer的地方，像home屏幕，状态栏，系统UI.
+
+SurfaceFlinger是这个合成器，上面也说了最好使用hwc硬件合成.
 - BufferQueue
 
 BufferQueue将不同Android图形组件间连接了起来。从生产者到消费者中间有一对queue(两个queue，一个位于生产者侧，一个位于消费者侧，没侧都有一个buffer)。一旦生产者确定buffer数据生产完成，SurfaceFlinger得到通知后就会合成输出到显示器上

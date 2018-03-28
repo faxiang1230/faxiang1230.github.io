@@ -10,7 +10,6 @@ tags:
   - 杂活
 ---
 # 我干过的杂活们
-没啥技术含量又总容易忘的东西
 ## 重启setupwizard
 老板想要第一次开机启动后，给里面加点料，然后再恢复现场，用户就感觉不到我们做过的伟大工作了.
 
@@ -42,3 +41,15 @@ pm.setComponentEnabledSetting(name, PackageManager.COMPONENT_ENABLED_STATE_DISAB
 每次重启之后也不会启动这个应用，那么肯定是存在flash或者硬盘上了，顺着找就可以看到是存储在`/data/system/users/0/package-restrictions.xml`文件中；不管是删除整个文件也好还是只删除特定行也好，都可以重新使能setupwizard应用
 ### 方法
 `rm /data/system/users/0/package-restrictions.xml`
+## 锁屏应用
+锁屏三大要素:  
+- 1.监听屏幕亮灭的广播  
+静态或者动态注册广播`android.intent.action.SCREEN_ON`,实现在亮屏的时候能够启动开始强制用户认证过程  
+下面两个就是怎么防止用户绕过认证过程  
+- 2.使导航栏和状态栏消失  
+这个功能是在`SystemUI`中完成的，通过`intent`和`SystemUI`互通消息.  
+状态栏中可以实现消息下拉，还能够直接进入`Setting`中;导航栏更厉害，有`HOME`直接到`Launcher`界面，`历史功能`中可以杀死应用
+- 3.禁止HOME键,历史功能  
+手机上有可能有硬件HOME键或者其他的软件按键，这可能就绕过了锁屏应用，所以肯定是需要禁止按键功能
+- 4.防止后台被杀  
+普通应用如果转为后台进程，那么它的重要性就相应降低了，当内存不足的时候优先杀这些进程，所以还需要防止后台被杀
