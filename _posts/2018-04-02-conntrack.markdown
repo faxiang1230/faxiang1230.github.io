@@ -18,7 +18,7 @@ conntrack模块一般只是提取`元信息`记录，并不会丢弃数据包，
 
 先再来看一下netfilter框架，它提供了数据包在网络栈传输路径上各个关键节点注册回调函数的能力，从而回调函数可以对数据包进行各种操作:修改地址，丢弃数据包，记录日志等。所有接收、发送的数据都需要经过netfilter框架，它有５个挂接点:`PRE_ROUTING,LOCAL_IN,FORWARD,POST_ROUTING,LOCAL_OUT`. 用户一般会使用netfilter的前端应用`iptables`来修改、查看这５张表.
 下图展示了路径中关键节点:  
-![](../images/Netfilter-packet-flow.svg)  
+![](../images/netfilter-packet-flow.jpg)  
 绿色的表示IP层hook点，而蓝色表示mac层hook点;  
 这张图展示了所有表的关键节点和调用顺序，netconntrack,nat,filter等都是在节点注册回调，回调函数通过优先级来决定调用次序，通过优先级的安排让不同的module可以相互协作.  
 
