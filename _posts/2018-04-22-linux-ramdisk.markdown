@@ -10,6 +10,8 @@ tags:
   - initrd
   - 转载
 ---
+> 转载：http://www.cnblogs.com/armlinux/archive/2011/03/30/2396827.html  
+
 摘要:对于Linux用户来说，Ramdisk并不陌生，可是为什么需要它呢？本文对Ramdisk在内核启动过程中的作用，以及它的内部机制进行深入介绍。
 
 # initrd 和 initramfs在内核中的处理
