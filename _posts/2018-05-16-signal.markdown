@@ -1,0 +1,13 @@
+---
+layout:     post
+title:      "kill信号"
+date:       2018-05-16 20:40:45
+author:     "faxiang1230"
+header-img: "img/post-bg-2015.jpg"
+catalog: true
+tags:
+  - linux
+  - signal
+---
+# 信号
+## kill的过程
