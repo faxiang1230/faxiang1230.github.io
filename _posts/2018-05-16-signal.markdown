@@ -87,7 +87,7 @@ setup_frame
 ```
 设置好之后，随后的执行过程会调用信号处理程序，结束的时候调用sigreturn陷入到内核中，清除信号处理栈，恢复进程上下文，下一次切换到用户状态时,应用程序可以继续运行。
 
-![image](images/signal.jpeg)
+![image](/images/signal.jpeg)
 ## 信号的使用
 ### sigio
 A进程注册signal handler等待IO数据ready,B进程搬运数据，搬运完之后向A发送信号通知其数据就位。就是典型的进程间通信
