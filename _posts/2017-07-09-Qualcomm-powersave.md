@@ -53,7 +53,7 @@ power测试可能就是这么扣出来的(纯属瞎掰),然后手机厂商也拿
 ## Power管理
 
 高通的原理图还是画的比较清楚的
-![image](../images/8974arch.jpg).
+![image](/images/8974arch.jpg).
 
 RPM:
 rpm(resource power manager,右上角很小的一个chip，好像是一个低级的arm处理器)管理整个系统的功耗，莫看rpm就占一点点空间，站在power角度上看，rpm是master，其他的所有设备，子系统都是slave，都得听他的;

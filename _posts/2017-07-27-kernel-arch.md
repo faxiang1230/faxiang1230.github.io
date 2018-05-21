@@ -49,7 +49,7 @@ tags:
 如果中断的线是激活的，中断控制器就把电信号发送给处理器的某个特定引脚。处理器于是立即停止自己正在做的事，
 跳到中断处理程序的入口点，进行中断处理。
 
-![image](../images/hardInterruptOverview.jpg)
+![image](/images/hardInterruptOverview.jpg)
 
 (1) 硬中断  
 由与系统相连的外设(比如网卡、硬盘)自动产生的。主要是用来通知操作系统系统外设状态的变化。比如当网卡收到数据包

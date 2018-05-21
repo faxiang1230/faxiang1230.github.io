@@ -24,7 +24,7 @@ sudo stap-prep
 
 可以进行百度搜索ubuntu源，也可以到ubuntu的wiki上找对应版本的源，这里只提供一个比较简单的方法来选择源:
 
-![images](../images/ubuntu-apt-source.jpg)
+![images](/images/ubuntu-apt-source.jpg)
 
 Setting->Software&Updates->Download from:->清华tuna的源
 

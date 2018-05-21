@@ -20,7 +20,7 @@ RFS:Receive Flow Steering,多个数据流中，同一个数据流都流向同一
 很多事情是在初始化的时候搞的，所以很有必要来看初始化的时候都干了什么  
 ### 初始化
 
-![](../images/network-tuning-softirq.jpg)  
+![](/images/network-tuning-softirq.jpg)  
 
 在内核中，设备通过中断的方式来告诉CPU某些事件需要处理，在网络中更是如此，网卡设备通常都是中断CPU通知有新的网络包到了。我们都知道,在Linux系统中中断的优先级是最高的，除了在禁止中断的时候，中断处理可以终止任何的程序上下文切换进入中断上下文，在中断处理中最少也是要禁止本中断线，有时候还会禁止全局中断，为了减少因为中断处理时间比较差而遗漏掉的中断事件通常将中断处理分成上半部和下半部,而下半部通常就是我们说的软中断(另外一方面，软中断只是下半部的一种机制，还有tasklet和workqueue,不过后两种都是基于软中断的).     
 
@@ -35,7 +35,7 @@ RFS:Receive Flow Steering,多个数据流中，同一个数据流都流向同一
 `net_dev_init`中将会通过`open_softirq`来注册`NET_RX_SOFTIRQ`软中断到系统中，而其回调方法就是`net_rx_action`。
 
 ### 接收数据
-![](../images/network-tuning-nic_dma.jpg)
+![](/images/network-tuning-nic_dma.jpg)
 
 当NIC从网络上接收到数据时,将会利用DMA将数据搬移到RAM中。在`igb`网卡驱动中，申请了一块RAM，使用`ring buffer`环形队列机制来管理这块RAM,就是为了存储接收到的网络数据包。
 目前有一些NIC支持多个队列，就是在接收到网络数据是，可以使用DMA搬移到不同的队列中。一些NIC就可以根据多队列，充分利用多处理器来处理网络数据包。如果你需要了解多队列的NIC,找些sheet看看吧.  
@@ -53,7 +53,7 @@ RFS:Receive Flow Steering,多个数据流中，同一个数据流都流向同一
 在初始化时做的工作在中断处理中会调用`napi_schedule`，设置`state`的状态位并且将`napi_struct`添加到`softnet_data`->`poll_list`中，后面在软中断处理中会从链表中遍历所有的`napi_struct`并逐一处理。
 
 ### 开始处理网络数据
-![](../images/network-tuning-net_rx_action.jpg)
+![](/images/network-tuning-net_rx_action.jpg)
 
 现在开始真正的数据处理，最开始是在软中断中处理,但是为了避免软中断太多，完全不给用户进程机会，所以设置了两个上限:数量和时间.当两个任一条件超出就会退出软中断处理，将剩余的处理延迟到`ksoftirqd`中。下面我们来看`ksoftirqd`中调用`net_rx_action`开始处理在当前CPU上所有的`NAPI`的`poll`。
 
@@ -72,7 +72,7 @@ RFS:Receive Flow Steering,多个数据流中，同一个数据流都流向同一
   6.当通过`GRO`来处理时,调用关系链在此就结束了；没有通过`GRO`处理就会直接在`net_receive_skb`中处理。两种路径最终都会将数据交给上面的协议层进行处理
 
 下面来看一下`net_receive_skb`中如何使用`RPS`来将包分发到多核中处理  
-![](../images/network-tuning-netif_receive_skb.jpg)  
+![](/images/network-tuning-netif_receive_skb.jpg)  
 在`netif_receive_skb`中的处理，根据是否启用`RPS`可以分成两个执行路径。默认的Linux内核时没有启用`RPS`,需要具体地使能和配置才能启用这个特性。
 
 在`RPS`特性没有启用  

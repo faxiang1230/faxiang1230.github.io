@@ -119,10 +119,10 @@ struct slab {
 		};
 };
 ```
-![image](../images/slab.jpg)
+![image](/images/slab.jpg)
 
 slab分配总体样子:  
-![image](../images/slab-all.jpg)
+![image](/images/slab-all.jpg)
 
 分配时，先从`kmem_cache->array_cache`中寻找，如果找不到再从`kmem_cache->kmem_cache_node->shared`中分配，然后再从`kmem_cache->kmem_cache_node->slabs_free`分配，不足的时候再从`per_cpu_pages`或`buddy`中分配.
 ### per_cpu_pages

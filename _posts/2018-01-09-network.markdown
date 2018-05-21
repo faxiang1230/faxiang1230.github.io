@@ -47,7 +47,7 @@ UDP:丢失一两帧数据没啥问题，比如多媒体播放，少播一帧用�
 在传输层之上的统称为应用层，应用层也有很多的协议:http,ftp,telnet,snmp
 
 一个完整的以太网数据帧结构:  
-![image](../images/network-frame-format.jpg)
+![image](/images/network-frame-format.jpg)
 
 理论的东西可以选择`TCP/IP 第一卷`  
 如何更加直观的理解协议:可以通过cisco/华为的网络模拟软件来搭建环境，没钱的吊丝需要学会使用这些软件
@@ -67,7 +67,7 @@ TCP/IP只是规范，还需要具体的实现才能真正连通网络，Linux内
 
 除了在物理设备之外还实现了一些虚拟设备来模拟真实物理设备的功能:tun/tap来模拟真实网卡，还有veth设备，bridge设备模拟网桥。这些虚拟设备很多时候可以帮你实现很多功能的，例如OPENVPN,vtun等使用的tun/tap虚拟网卡。
 还有软件上的一些实现,在这里就不一一列举了，看别人家的图
-![](../images/tun-position.jpg)  
+![](/images/tun-position.jpg)  
 
 **怎么去理解这些东西:**  
 先看框架性原理再仔细读code，没有别的招；  

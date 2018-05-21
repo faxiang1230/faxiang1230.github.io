@@ -38,8 +38,8 @@ tun设备实现了两种功能,一种是网络设备,有收发包的能力，注
 ![](/images/SimpleVPN2.jpeg)  
 原始的连接图，客户端B`10.0.0.161`访问server`10.1.2.5`上的服务，来往的数据包非常简单明确:  
 
-![](../images/SimpleIpsecFlow2.jpeg)  
-原图戳[这里](../images/SimpleIpsecFlow2.jpeg)  
+![](/images/SimpleIpsecFlow2.jpeg)  
+原图戳[这里](/images/SimpleIpsecFlow2.jpeg)  
 **场景２:**  
 
 1.客户端A访问服务端B,在同一个网段.  
