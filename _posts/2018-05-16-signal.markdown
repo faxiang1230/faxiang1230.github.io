@@ -10,4 +10,100 @@ tags:
   - signal
 ---
 # 信号
-## kill的过程
+信号是一种原始的通信机制，被设计用来进程间通信的.除了进程互相发送信号外，内核也会主动发送信号给进程(都是不太好的消息,例如`SIGSEGV`).  
+进程通过系统调用来发送信号给目标进程/进程组/线程/线程组。目标进程接收到信号后，进行信号处理.
+信号处理的结果有以下几种:
+```
+1.忽略,什么都不做
+2.结束，结束进程或进程组
+3.停止，将进程置于TASK_STOPPED状态；继续，如果进程之前是TASK_STOPPED状态，在收到SIG_CONT之后继续运行
+4.内存转储
+```
+有两个比较特殊的信号:`SIGKILL`和`SIGSTOP`,它们无法被忽略、阻塞、捕捉，只能采用系统的默认处理,
+在代码实现中当发现这两个信号的时候直接就在内核处理了不会再尝试用户进程注册的信号处理函数。
+`SIGKILL`是当进程失控时终止进程的唯一手段,和另外一个信号`SIGTERM`的作用相似，但是后者是可以捕捉的。而`SIGSTOP`是用来暂停进程的,配对的`SIGCONT`可以使暂停的进程继续运行。
+
+下面主要是追踪一个`kill　$PID`的过程,目标进程是一个单线程进程
+## 信号的delivery
+kill既是一个工具,也是一个系统调用，可以使用`strace kill $PID`来查看详细参数，或者直接`man`.  
+下面我们可以直接到内核中来,看一下具体的系统调用实现过程
+```
+kernel/signal.c
+  kill_something_info
+    kill_pid_info
+      group_send_sig_info
+        check_kill_permission
+        do_send_sig_info
+          send_signal
+```
+主要的工作都是在`__send_signal`中
+```
+__send_signal
+  prepare_signal
+    sig_ignored
+  __sigqueue_alloc
+  list_add_tail(&q->list, &pending->list);
+  complete_signal
+    signal_wake_up
+      set_tsk_thread_flag(t, TIF_SIGPENDING)
+      wake_up_state
+      kick_process
+```
+1..检查信号是否被忽略  
+2.将信号挂入到目标进程的sigpending链表上  
+3.设置目标进程的TIF_SIGPENDING标志,唤醒目标进程抢占当前进程  
+## 信号的处理
+1.目标进程被唤醒后,开始运行，从内核态要切换到用户态，此时内核会检查信号队列。发现有待处理信号,开始处理  
+2.获取信号信息,并从sigpending链表中删除信号  
+3.操作用户态的栈，从内核态切换到用户态程序之后运行信号处理而不是正常的程序代码，在信号处理函数结束的时候调用sigreturn，然后回归到正常的程序  
+```
+arch/arm/kernel/entry-common.S
+ret_to_user
+  work_pending
+    do_work_pending
+      do_signal
+        get_signal->get_signal_to_deliver  过滤SIGSTOP信号，内核直接处理。SIGKILL信号，内核杀死进程
+        handle_signal
+          setup_frame
+            setup_sigframe
+            setup_return
+          signal_delivered
+```
+这里面有一些汇编代码，一部分是从内核态返回用户态时检查待处理信号，另外一部分是手工为信号处理函数建立堆栈。  
+如果没有信号处理，就直接从内核态返回到用户程序了，现在需要手工创建信号处理栈,在信号处理函数完结后，调用`sigreturn`清除信号处理栈，并且返回到用户程序.
+```
+setup_frame
+  get_sigframe  //手动申请信号处理栈空间,这一层已经是位于用户空间了
+  setup_sigframe //将原本要返回到用户程序的寄存器现场保存到信号处理栈上
+    __put_user_error(regs->ARM_r0, &sf->uc.uc_mcontext.arm_r0, err);
+    __put_user_error(regs->ARM_r1, &sf->uc.uc_mcontext.arm_r1, err);
+    __put_user_error(regs->ARM_r2, &sf->uc.uc_mcontext.arm_r2, err);
+  setup_return  //设置r0=signum,pc=信号处理函数,lr=sigreturn_codes,sp=信号处理栈
+    regs->ARM_r0 = map_sig(ksig->sig);
+    regs->ARM_sp = (unsigned long)frame;
+    regs->ARM_lr = retcode;
+    regs->ARM_pc = handler;
+    regs->ARM_cpsr = cpsr;
+```
+设置好之后，随后的执行过程会调用信号处理程序，结束的时候调用sigreturn陷入到内核中，清除信号处理栈，恢复进程上下文，下一次切换到用户状态时,应用程序可以继续运行。
+
+![](../images/signal.jpeg)
+## 信号的使用
+### sigio
+A进程注册signal handler等待IO数据ready,B进程搬运数据，搬运完之后向A发送信号通知其数据就位。就是典型的进程间通信
+```
+signal(SIGIO, signalio_handler);
+```
+### 捕捉异常,打印堆栈
+Android的linker程序中就是使用信号，在捕捉到异常信号后获取堆栈信息，然后再次重发信号交给默认的信号处理程序来处理。
+### 防止被杀掉
+捕捉普通的信号，更改其默认处理  
+使用下面两个信号:`SIGKILL`和`SIGSTOP`,这两个信号无法忽略、阻塞、捕捉，只能让系统默认处理，即杀死和停掉
+### 限制ptrace的使用
+1.kernel本身限制ptrace的滥用，非父子关系默认禁止ptrace
+`/proc/sys/kernel/yama/ptrace_scope`:如果A和B不是父子关系，那么不允许A对B使用`ptrace`
+```
+1. ./a.out
+2. strace -p `pidof a.out` Permission Denied
+```
+2.禁止gdb
