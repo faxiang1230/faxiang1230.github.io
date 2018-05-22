@@ -10,12 +10,12 @@ tags:
   - zygote
 ---
 # zygote 启动简述
-从ZygoteInit的main方法开始
+从ZygoteInit的main方法开始  
 1. 创建一个socket:/dev/socket/zygote来监听其他服务对自己的fork请求
 ```
 registerZygoteSocket
 ```
-2. 预加载资源
+2. 预加载资源  
 zygote进程本身加载系统共用的资源，当fork一个进程时Linux有个特性COW(copy on write),写时拷贝的方式能够无谓的资源拷贝直到真正需要更改时。
 而系统预加载的资源本身是只读的，可以简单看成一个文本段，这样fork进程后不需要再次加载系统资源，加速应用启动.
 ```
@@ -42,7 +42,7 @@ zygote进程本身加载系统共用的资源，当fork一个进程时Linux有�
 
 起始就是开启了ProcessState，ServiceManager,然后开启了重要的framework服务:ActivityManager,WindowManager,MediaService,MountService等等
 
-总结:
+**总结:**
 
 1.app_process作为zygote的实体开始运行，初始化art运行时环境
 
@@ -62,7 +62,8 @@ zygote进程本身加载系统共用的资源，当fork一个进程时Linux有�
 
 system_server和servicemanager,zygote的关系
 
-servicemanager是一个native的进程，在init.rc中被启动;我们知道android除了使用SDK开发之外很多追求效率的应用还会使用NDK开发，此时可以直接从serviemanager中直接请求服务；servicemanager是管理native的服务而设立的；
+servicemanager是一个native的进程，在init.rc中被启动;
+我们知道android除了使用SDK开发之外很多追求效率的应用还会使用NDK开发，此时可以直接从serviemanager中直接请求服务；servicemanager是管理native的服务而设立的；
 
 zygote也是在init.rc中被启动的，预先加载系统启动资源，类等，可以加速应用的启动；
 

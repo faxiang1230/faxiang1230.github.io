@@ -20,11 +20,12 @@ oops原意是`哎呀`的意思，就是惊奇的预期.在Linux内核中是發�
 2.之后可能只是杀死导致oops的进程(包括kernel thread)，然后系统继续可以运行，但是可靠性将会降低    
 3.严重的oops将会导致系统panic
 ## panic
-什么是panic:
+什么是panic:  
 严重的oops，系统认为已经不能继续正常运行时就会panic   
 什么时候发生panic:  
 Oops in interrupt, with panic_on_oops enabled, manual panic() calls  
 HW failure, critical memory allocation fail, init/idle task killed, interrupt handler killed  
+
 - BUG_ON产生的断言  
 - 内存转换的相关错误：
 ```
@@ -44,23 +45,24 @@ A warning, unless config/bootparam softlockup_panic enabled
 Soft lockup can be harmless, so not good idea in production
 - Hard lockup  
 CPU spent 10s with disabled interrupts
-- Detection of both combines several generic mechanisms
+- Detection of both combines several generic mechanisms  
 High priority kernel watchdog thread updates soft lockup timestamp
 hrtimer set to deliver periodic interrupts, increments hard lockup
 counter and wakes up the watchdog thread
 NMI perf event checks if hrtimers interrupts were processed and if
 watchdog thread was scheduled
-- Hung task check
+- Hung task check  
 “INFO: task ... blocked for more than 120 seconds”
 khungtaskd periodically processes tasks in uninterruptible
 sleep and checks if their switch count changed
-- RCU stall detector
+- RCU stall detector  
   - Detects when RCU grace period is too long (21s)
     CPU looping in RCU critical section or disabled interrupts, preemption or
     bottom halves, no scheduling points in non-preempt kernels
   - RT task preempting non-RT task in RCU critical section
 - Several other debugging config options (later)
-panic的过程:
+
+panic的过程:  
 May trigger crash dump if configured, or reboot after delay
 ## BUG
 ## WARN
@@ -70,7 +72,7 @@ May trigger crash dump if configured, or reboot after delay
 ### kernel NULL pointer:
 ### kernel page fault:
 ### bad page state:
-## kernel oops info
+## kernel oops info  
 ```
 [  266.491864] ------------[ cut here ]------------
 [  266.491904] kernel BUG at mm/rmap.c:399!   需要配置CONFIG_DEBUG_BUGVERBOSE
@@ -156,7 +158,7 @@ CONFIG_GENERIC_BUG_RELATIVE_POINTERS - use 32-bit pointers relative to
 the containing struct bug_entry for bug_addr and file.
 CONFIG_DEBUG_BUGVERBOSE - emit full file+line information for each BUG
 __bug_table__实现了一个symbols段，当异常发生时并检查出是ud2时会到__bug_table__中查询，
-得出file+line信息
+得出file+line信息  
 CONFIG_BUG and CONFIG_DEBUG_BUGVERBOSE are potentially user-settable
 (though they're generally always on).
 CONFIG_GENERIC_BUG is set by each architecture using this code.

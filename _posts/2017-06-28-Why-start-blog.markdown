@@ -6,7 +6,7 @@ date:       2017-06-27 14:40:45
 author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
 catalog: true
-tags: -personal
+tags: - personal
 ---
 
 ## 为什么开始写博客

@@ -58,9 +58,8 @@ find . | cpio -o -H newc |gzip > $KERNEL/rootfs.img
 cp rootfs.img $KERNEL/
 ```
 ## 安装QEMU
-最简单的安装方式:`apt-get install qemu`,这种方式采用了QEMU的默认配置；
-可能QEMU的某些默认功能没有打开，那么你需要手动从source编译qemu(略)
-
+最简单的安装方式:`apt-get install qemu`,这种方式采用了QEMU的默认配置；  
+可能QEMU的某些默认功能没有打开，那么你需要手动从source编译qemu(略)  
 创建一个软链接来减少输入字符:
 ```
 $ln -s /usr/bin/qemu-system-x86_64 /usr/bin/qemu
@@ -85,7 +84,7 @@ Are you sure you want to change the file? (y or n) y
 Reading symbols from vmlinux...done.
 ```
 ## 使用QEMU启动完整的镜像
-有时候拿到一个完整的iso启动镜像，就需要变一下启动参数:
+有时候拿到一个完整的iso启动镜像，就需要变一下启动参数:  
 
 ### 通过legacy引导启动
 ```

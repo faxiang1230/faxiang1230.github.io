@@ -15,11 +15,11 @@ tags:
 下面的东西总结性居多，没有涉及到具体的方法，操作性不强，只是作为一个全局概览。
 
 ## Power状态
-standby：手机静置，驻网，无数据活动，无小区handover
-idle:用户没有明确告诉手机休息的时候，phone本身也没有后台或周期任务，很可能就进入cpu idle例程；除了cpu还有外设此时无任务可做也会尝试主动挂起自己;所有条件都满足之后就是cpu idle;
-suspend:当手机明确不使用时，特别是按了power键灭屏告诉手机我要休息的时候，此时phone会主动发起suspend过程，将所有的设备主动尝试挂起
+standby：手机静置，驻网，无数据活动，无小区handover  
+idle:用户没有明确告诉手机休息的时候，phone本身也没有后台或周期任务，很可能就进入cpu idle例程；除了cpu还有外设此时无任务可做也会尝试主动挂起自己;所有条件都满足之后就是cpu idle;  
+suspend:当手机明确不使用时，特别是按了power键灭屏告诉手机我要休息的时候，此时phone会主动发起suspend过程，将所有的设备主动尝试挂起  
 
-suspend和idle看起来很想，主要的区别是两个睡眠程度不一样，相对而言suspend睡得深度更深一些，那对应的也是有代价的，唤醒时间长，换句话就是延迟高;有人在鼓捣一个S2I(suspend to idle)的东东，结合suspend和idle的优点:平均电流更低，唤醒延迟小
+suspend和idle看起来很想，主要的区别是两个睡眠程度不一样，相对而言suspend睡得深度更深一些，那对应的也是有代价的，唤醒时间长，换句话就是延迟高;有人在鼓捣一个S2I(suspend to idle)的东东，结合suspend和idle的优点:平均电流更低，唤醒延迟小   
 http://events.linuxfoundation.org/sites/events/files/slides/what-is-suspend-to-idle.pdf
 
 ## Power测试
@@ -38,8 +38,7 @@ http://events.linuxfoundation.org/sites/events/files/slides/what-is-suspend-to-i
 如果各个module都没有问题，那么组合起来试试如何?  
 如果组合起来也没有问题，那么可以让用户体验试试.  
 
-power测试可能就是这么扣出来的(纯属瞎掰),然后手机厂商也拿这个测试结果向消费者证明自身的功耗;
-
+power测试可能就是这么扣出来的(纯属瞎掰),然后手机厂商也拿这个测试结果向消费者证明自身的功耗;  
 非常佩服肢解power系统的人，非arch级别的人很难整出来这种测试方案;
 
 如何分类:  
@@ -49,26 +48,21 @@ power测试可能就是这么扣出来的(纯属瞎掰),然后手机厂商也拿
 
 - 一般会先要求测试各个独立的场景，然后可能是复合场景的功耗测试。  
 复合场景:基本上是挑选一些实际中使用的场景  
-听着音乐上网，发短信，开着wifi打电话，蓝牙播放音乐
+听着音乐上网，发短信，开着wifi打电话，蓝牙播放音乐  
 ## Power管理
 
-高通的原理图还是画的比较清楚的
+高通的原理图还是画的比较清楚的  
 ![image](/images/8974arch.jpg).
 
-RPM:
-rpm(resource power manager,右上角很小的一个chip，好像是一个低级的arm处理器)管理整个系统的功耗，莫看rpm就占一点点空间，站在power角度上看，rpm是master，其他的所有设备，子系统都是slave，都得听他的;
+RPM:  
+rpm(resource power manager,右上角很小的一个chip，好像是一个低级的arm处理器)管理整个系统的功耗，莫看rpm就占一点点空间，站在power角度上看，rpm是master，其他的所有设备，子系统都是slave，都得听他的;  
+管理范畴：clock，power rail，bus width等  
+管理的框架：NPA(Node Power Arch)，关于如何投票可以参考AP侧的clock的driver和Modem，LPASS中的投票部分；  
+rpm的框架：rpm和各个子系统的关系：通过NPA来管理所有的请求，通过SMEM来通信  
+rpm中有PMIC的driver，可以操作PMIC;另外还有BUS,CLK,DDR的driver，可以控制他们的clock和power rail(power rail很蛋疼，不知道怎么翻译过来)。  
 
-管理范畴：clock，power rail，bus width等
-
-管理的框架：NPA(Node Power Arch)，关于如何投票可以参考AP侧的clock的driver和Modem，LPASS中的投票部分；
-
-rpm的框架：rpm和各个子系统的关系：通过NPA来管理所有的请求，通过SMEM来通信
-
-rpm中有PMIC的driver，可以操作PMIC;另外还有BUS,CLK,DDR的driver，可以控制他们的clock和power rail(power rail很蛋疼，不知道怎么翻译过来)。
-
-MPM:
-上面哪个图干脆就没画MPM，不过不影响它的重要性
-
+MPM:  
+上面哪个图干脆就没画MPM，不过不影响它的重要性  
 MPM会在rpm睡眠后接管整个power系统，最主要的功能是能够接收外部事件唤醒整个系统，所以很重要的一部分是中断的管理。
 
 子系统:  
@@ -79,13 +73,10 @@ MDSS(Modem subsystem),
 WCNSS(wireless connect network subsystem)
 ## Power debug的手段：
 
-软件方法:rpm log,kernel log,dynamic_debug,ftrace,wakelock,debug_mask,suspend/idle过程的理解;
-
-rpm log:高通平台上power最直接的日志，能够显示出各个子系统的一些clock和power状态
-
-F3log:一些关于npa()的日志,子系统和rpm通信的框架，能够dump出一些最后的消息
-
-APSS上主要就是kernel的运行了,方法多种多样:dmesg,dynamic_debug,ftrace,wakelock,top,powertop,systrace,
+软件方法:rpm log,kernel log,dynamic_debug,ftrace,wakelock,debug_mask,suspend/idle过程的理解;  
+rpm log:高通平台上power最直接的日志，能够显示出各个子系统的一些clock和power状态  
+F3log:一些关于npa()的日志,子系统和rpm通信的框架，能够dump出一些最后的消息  
+APSS上主要就是kernel的运行了,方法多种多样:dmesg,dynamic_debug,ftrace,wakelock,top,powertop,systrace,  
 
 其他方法：  
 dump，可以dump出睡眠时各个GPIO的配置(针对低电流过高的问题)；  
@@ -120,16 +111,14 @@ CPU和Modem，其他的DSP，他们都是有工作频率的，不同的工作频
 其他的设备应该只有开和关两种状态吧，一般都可以在dmesg中找到设备工作的一些状态；没有现成的就新造嘛.
 ```
 
-power是比较依赖实践的一个事，可以简单的进行对比测试来缩小问题的范围，然后找到针对性的方法来进一步的debug;
-
-可以尝试从零坐起:先将设备(WIFI，BT，,sensor:light,autorotate,压力，握力)都关闭，集中调试子系统的状态，然后挨个打开设备调试设备的driver（一般比较简单）.
+power是比较依赖实践的一个事，可以简单的进行对比测试来缩小问题的范围，然后找到针对性的方法来进一步的debug;  
+可以尝试从零坐起:先将设备(WIFI，BT，,sensor:light,autorotate,压力，握力)都关闭，集中调试子系统的状态，然后挨个打开设备调试设备的driver（一般比较简单）.  
 
 ## Android侧的debug手段
-
-- 1.wakeup唤醒源:
+- 1.wakeup唤醒源:  
 唤醒进入休眠状态下的phone:  
 外部中断事件:例如触摸了手机,手机的sensor工作，都可能导致中断唤醒phone  
-内部中断事件:一般分为ap侧和modem侧，ap侧的一般是定时器，modem侧的基本和协议相关:小区切换啦，信号强度变化啦，周期性尝试切换回home网啦；  
+内部中断事件:一般分为ap侧和modem侧，ap侧的一般是定时器，modem侧的基本和协议相关:小区切换，信号强度变化，周期性尝试切换回home网；  
 
 ```
 mount –t debugfs none /sys/kernel/debug
@@ -147,7 +136,6 @@ sleep 30 && cat /proc/timer_stats > /data/timer_stats &
 
 - 2.suspend fail:  
 灭屏之后总是suspend过程失败，一般都是有wakeup source问题；其余的很容易通过dmesg来判断问题点.
-
 ```
 直接在suspend过程中埋点，打印一些log，特别是wakeup source的打印
 

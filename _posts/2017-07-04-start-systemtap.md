@@ -26,10 +26,9 @@ sudo stap-prep
 
 ![images](/images/ubuntu-apt-source.jpg)
 
-Setting->Software&Updates->Download from:->清华tuna的源
+`Setting->Software&Updates->Download from:->清华tuna的源`
 
 如果不是教育网的话，可以选择163或着阿里云;然后apt-get update之后下载dbgsym
-
 
 如果凑巧你的内核版本没有可用的dbgsym,那么你可能需要自己编译一个dbgsym:
 ```
