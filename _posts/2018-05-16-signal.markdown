@@ -101,9 +101,29 @@ Android的linker程序中就是使用信号，在捕捉到异常信号后获取�
 使用下面两个信号:`SIGKILL`和`SIGSTOP`,这两个信号无法忽略、阻塞、捕捉，只能让系统默认处理，即杀死和停掉
 ### 限制ptrace的使用
 1.kernel本身限制ptrace的滥用，非父子关系默认禁止ptrace
-`/proc/sys/kernel/yama/ptrace_scope`:如果A和B不是父子关系，那么不允许A对B使用`ptrace`
+`/proc/sys/kernel/yama/ptrace_scope`如果A和B不是父子关系，那么不允许A对B使用`ptrace`
 ```
 1. ./a.out
 2. strace -p `pidof a.out` Permission Denied
 ```
-2.禁止gdb
+2.禁止gdb  
+在程序开始运行的时候使用`ptrace`的`PTRACE_TRACEME`参数来找到是否有人用这样的系统调用挂到我们程序上我们,但是很容易破解,直接单步到ptrace
+```
+main()
+{
+    if (ptrace(PTRACE_TRACEME, 0, 1, 0) < 0) {
+        printf("SOMEBODY TRACE ME!\n");
+        return;
+    }
+}
+
+$gdb a.out
+$b main
+$disassemble
+0x000000000040070b <+62>:	callq  0x4005c0 <ptrace@plt>
+0x0000000000400710 <+67>:	test   %rax,%rax
+=> 0x0000000000400713 <+70>:	jns    0x400721 <main+84>
+$stepi      //跳转到ptrace的返回结果判定
+$set %rax=1 //看汇编使用的寄存器
+$c //这样就绕过了ptrace检测
+```
