@@ -10,7 +10,6 @@ tags:
   - Android
 ---
 # 从Linux角度看Android系统
-Thanks for Randy'a question,I know what I don't know and learn a different view of Android.  
 很多人都说Android是运行在Linux内核上的，我也知道Android底层跑的是Linux内核，我的认识仅止于此。
 我对上层的Andrid框架，应用等的认识一直都没有和Linux模型结合起来，没有认真从Linux模型的角度来
 审视Android系统，在我的观念中,Linux和Android是完全不同的两个东西，这个观念是完全错误的。
@@ -180,3 +179,5 @@ base=/system
 export CLASSPATH=$base/framework/pm.jar
 exec app_process $base/bin com.android.commands.pm.Pm "$@"
 ```
+## acknowledgement
+Thanks for Randy'a question,I know what I don't know and learn a different viewport of Android.Nice Professor!  
