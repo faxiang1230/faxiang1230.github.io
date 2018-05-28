@@ -10,14 +10,22 @@ tags:
   - zygote
 ---
 # zygote 启动简述
-从ZygoteInit的main方法开始  
-1. 创建一个socket:/dev/socket/zygote来监听其他服务对自己的fork请求
+
+- 获取socket的句柄，它是通过在init在启动服务的时候创建并发布给应用的，在init.rc中配置
+
 ```
-registerZygoteSocket
+service zygote /system/bin/app_process -Xzygote /system/bin --zygote --start-system-server                                                                                                                         
+    class main
+    socket zygote stream 660 root system
 ```
-2. 预加载资源  
-zygote进程本身加载系统共用的资源，当fork一个进程时Linux有个特性COW(copy on write),写时拷贝的方式能够无谓的资源拷贝直到真正需要更改时。
-而系统预加载的资源本身是只读的，可以简单看成一个文本段，这样fork进程后不需要再次加载系统资源，加速应用启动.
+
+socket的位置是`/dev/socket/zygote`来监听其他服务对自己的fork请求,而典型的fork请求是由
+`frameworks/base/core/java/android/os/Process.java`发起的  
+- 预加载资源
+
+Android开发发现有很多资源是大部分apk都会使用的，所以为了加速应用的启动，它自己在启动的
+时候预加载这些资源，类似于ubuntu中的readahead机制，将IO请求集中在一起加载，避免CPU/IO互相等待。
+之后利用fork的`COW`特性，在应用启动的时候copy到它的虚拟地址空间中，如此以来就最大化加速了android的启动。
 ```
 254    static void preload() {
 255        Log.d(TAG, "begin preload");
@@ -31,16 +39,19 @@ zygote进程本身加载系统共用的资源，当fork一个进程时Linux有�
 263        Log.d(TAG, "end preload");
 264    }
 ```
+
 类资源:  
 这个是在代码中拷贝到机器上`/system/etc/preloaded-classes`,在art初始化的时候通过dex2oat工具将boot.oat中的类按照preloaded-classes列表中的类抽取出来，生成boot.art然后通过patchoat来进行段的随机偏移防止hacker获取到代码段位置.
 ```
 06-06 06:02:34.524 I/dex2oat ( 2040): /system/bin/dex2oat --image=/data/dalvik-cache/x86_64/system@framework@boot.art --dex-file=/system/framework/x86_64/boot.oat --oat-file=/data/dalvik-cache/x86_64/system@framework@boot.oat --instruction-set=x86_64 --instruction-set-features=smp,ssse3,sse4.1,sse4.2,-avx,-avx2 --base=0x6fc49000 --runtime-arg -Xms64m --runtime-arg -Xmx64m --compiler-filter=verify-at-runtime --image-classes=/system/etc/preloaded-classes --instruction-set-variant=x86_64 --instruction-set-features=default
 ```
-后面的Resource，OpenGL，SharedLibraries逗比较简单，不像类有这么个弯弯.
 
-3. fork了一个很重要的进程:system_server
+后面的Resource，OpenGL，SharedLibraries都比较简单，不像类有这么个弯弯.
 
-起始就是开启了ProcessState，ServiceManager,然后开启了重要的framework服务:ActivityManager,WindowManager,MediaService,MountService等等
+- fork了一个很重要的进程:system_server  
+
+起始就是开启了ProcessState，ServiceManager,然后开启了重要的framework服务:ActivityManager,WindowManager,MediaService,MountService等等。  
+把它安排在这里，一个是虚拟机刚刚初始化完成，另一个是必须在应用启动之前就ready,否则应用就无服务可用，处处报异常。  
 
 **总结:**
 

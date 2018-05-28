@@ -28,6 +28,7 @@ HW failure, critical memory allocation fail, init/idle task killed, interrupt ha
 
 - BUG_ON产生的断言  
 - 内存转换的相关错误：
+
 ```
 “BUG: unable to handle kernel paging
 request”

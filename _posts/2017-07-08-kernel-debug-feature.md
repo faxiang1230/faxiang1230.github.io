@@ -56,14 +56,14 @@ call strace  这一步需要CONFIG_KALLSYMS
 ## MAGIC键
 配置`CONFIG_MAGIC_SYSRQ`之后就会出现节点`/proc/sysrq-trigger`,向其中写值可以达到如下效果
 
-|字符|效果|
-|--|--|
-|c|Performs a system crash by a NULL pointer de-reference|
-|w|Dumps tasks that are in uninterruptable (blocked) state|
-|l|Shows a stack backtrace for all active CPUs.|
-|m|Dumps current memory info to your console.|
-|q|Dumps per CPU lists of all armed hrtimers (but NOT regular timer_list timers) and detailed information about all clockevent devices.|
-|t| Dumps a list of current tasks and their information to your console|
+|字符|效果|  
+|--|--|  
+|c|Performs a system crash by a NULL pointer de-reference|  
+|w|Dumps tasks that are in uninterruptable (blocked) state|  
+|l|Shows a stack backtrace for all active CPUs.|  
+|m|Dumps current memory info to your console.|  
+|q|Dumps per CPU lists of all armed hrtimers (but NOT regular timer_list timers) and detailed information about all clockevent devices.|  
+|t| Dumps a list of current tasks and their information to your console|  
 ## printk
 新手入门必备的利器，容易使用，健壮，内核级的printf，不必多说了  
 有时候printk的log打印过多，一个是占用CPU，另外一个是容易淹没其他重要的消息，可以使用这个API`printk_ratelimited`限制输出的次数
@@ -105,6 +105,7 @@ nullarbor:~ # echo -n 'file svcsock.c line 1603 +p' >
 nullarbor:~ # echo -n 'func svc_process -p' >
 				<debugfs>/dynamic_debug/control
 ```
+
 有时候你可能遇到在console init之前内核就死掉了，那么可能需要这个来获取一些信息:
 ```
 CONFIG_EARLY_PRINTK
@@ -113,6 +114,7 @@ CONFIG_EARLY_PRINTK_DIRECT=y
 ```
 
 ## PSTORE
+
 pstore原意persistent store,是想要在系统重启之前能够保存之前的一些信息，重启之后能够再次获取到之前的数据,特别是panic的信息;
 
 为什么不能保存到硬盘上或者是EMMC上呢？  
@@ -129,8 +131,9 @@ CONFIG_PSTORE
 -->CONFIG_PSTORE_FTRACE   ftrace message
 ```
 pstore提供的是一套可扩展的机制，ramoops利用这套机制实现了采用ram保存oops信息的功能;
-在x86平台上是没有热重启，每次重启都是重新走一遍`BIOS->grub->kernel`的流程，所有设备都需要`掉电->重新初始化`的过程，
-所以ramoops名称难免有点误导人;它的实现应该是利用BIOS里的NVRAM来保存数据，每次启动之后通过APEI接口来将这块NVRAM映射到RAM中来访问;
+在x86平台上是没有热重启，每次重启都是重新走一遍`BIOS->grub->kernel`的流程，所有设备都需要
+`掉电->重新初始化`的过程，所以ramoops名称难免有点误导人;它的实现应该是利用BIOS里的NVRAM来
+保存数据，每次启动之后通过APEI接口来将这块NVRAM映射到RAM中来访问;
 
 我一般是用它来抓panic的message,使用方法:  
 编辑内核参数，指定NVRAM要映射到RAM上哪个位置和size:
