@@ -43,7 +43,42 @@ service adbd /sbin/adbd --root_seclabel=u:r:su:s0
 ```
 系统启动时由init中fork出来的一个进程，有网络通信的权限，以`root`身份执行
 ## USB和tcp connect
+![image](/images/adb2.bmp)  
+主要的步骤:  
+1.初始化ADB中的传输层，即和传输介质无关的，底层目前有两种:usb线连接或者通过网络连接；
+主要就是创建一个类似于管道的socketpair，一端阻塞读，另外一端在下面的USB连接/TCP:5555端口有变化
+的时候会向这端写信息  
+2.初始化USB，开启线程周期性检测USB连接状态变化  
+3.初始化TCP socket,监听5555端口  
+4.阻塞等待  
+5.当有USB或者TCP:5555端口接收到请求时，将其物理传输方式和ADB的传输层挂接起来  
 
+USB和TCP在ADB看起来都是具体传输的方式，传输层主要是约定了在target和host中在传输层通信协议格式，
+```
+struct message {
+    unsigned command;       /* command identifier constant      */
+    unsigned arg0;          /* first argument                   */
+    unsigned arg1;          /* second argument                  */
+    unsigned data_length;   /* length of payload (0 is allowed) */
+    unsigned data_crc32;    /* crc32 of data payload            */
+    unsigned magic;         /* command ^ 0xffffffff             */
+};
+```
+command有:CONNECT,AUTH,OPEN,READY等,下面主要简单介绍一个`adb shell`怎么搭建起来的:  
+当你执行了`adb shell`，你本地的shell prompt消失，取而代之的是target设备上的shell prompt  
+```
+wangjx@wangjx-N000:～$ adb shell
+root@b8g:/ #
+```
+看起来像远程的控制台直接到本地来了:  
+1.打开一个`/dev/ptmx`,获取一个新的句柄fd，对应的是创建一个`/dev/pts/x`节点，可以通过读写`/dev/pts/x`来模拟终端  
+2.fork一个进程，重定向标准输入、标准输出、标准出错到`/dev/pts/x`,之后执行`/system/bin/sh`，这样shell的所有输入输出都被重定向到了`/dev/pts/x`，之后可以通过`/dev/ptmx`中的句柄fd来获取shell的输入输出
+3.将fd和传输层连接起来  
+最终看起来的结构像这样:  
+![image](/images/adb3.bmp)  
+**Ref:**  
+system/core/adb/protocol.txt  
+system/core/adb/OVERVIEW.TXT  
 ## android usb gadget driver
 drivers/usb/gadget/android.c
 ## 应用
