@@ -136,7 +136,7 @@ pstore提供的是一套可扩展的机制，ramoops利用这套机制实现了�
 保存数据，每次启动之后通过APEI接口来将这块NVRAM映射到RAM中来访问;
 
 我一般是用它来抓panic的message,使用方法:  
-编辑内核参数，指定NVRAM要映射到RAM上哪个位置和size:
+编辑内核参数，指定NVRAM要映射到RAM上哪个位置和size:  
 ```
 ramoops.mem_size=    不要太大，可以使用<1M
 ramoops.mem_address= 物理地址，置于RAM的物理地址范围
