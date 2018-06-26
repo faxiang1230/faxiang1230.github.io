@@ -38,6 +38,10 @@ native之间更加常用，在java层绝大多数都是使用binder来通信
 ## IBinder
 ## 服务的注册
 ### native服务
+1.定义一个接口文件， IXXXService, 继承IInterface
+2.定义BnXXX(), 继承 BnInterface<IXXXService)
+3.实现一个XXXService类，继承BnXXX(), 并具体实现onTransact() 函数。
+
 ### java服务
 
 Java较Native端实现简单很多，通过Aidl工具来实现类似功能。所以，要实现一个Java端的service，
