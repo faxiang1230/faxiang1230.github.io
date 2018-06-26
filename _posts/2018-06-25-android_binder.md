@@ -36,7 +36,24 @@ native服务，也可以调用java服务
 android中大部分使用binder进行IPC，但是它也没有完全抛弃传统的IPC方式，例如socket等，不过在
 native之间更加常用，在java层绝大多数都是使用binder来通信  
 ## IBinder
+![image](/images/binder-interface.png)  
+在binder IPC通信中，主要有两种类在起主要作用，IBinder用于标示唯一的服务，IInterface主要
+用于暴露服务接口，native的主要如上图所示。  
+面向binder driver通信的主要是IPCThreadState,负责具体和驱动搞事情，一个实例代表一个线程
+（Binder_1,Binder_2），服务端通常是有线程池的，多线程处理可以避免多个请求到来的时候阻塞排队
 ## 服务的注册
+![image](/images/binder-service.png)  
+service通过servicemanager来注册服务，通常我们看到的形式都是这样:
+```
+void MediaPlayerService::instantiate() {
+    defaultServiceManager()->addService(
+            String16("media.player"), new MediaPlayerService());
+}
+```
+在系统启动中servicemanager会将自己注册称为管理服务者，负责添加服务，查询服务，检查服务,其中
+添加服务肯定是为普通service服务的，而查询和检查服务是为普通客户端服务的。servicemanager也是
+遵循binder架构的，使用的时候也是通过`BpXXXX->IServiceManager`获取到服务编号的，不过它是
+类似于DNS服务器的角色，服务编号是已知的0.  
 ### native服务
 1.定义一个接口文件， IXXXService, 继承IInterface
 2.定义BnXXX(), 继承 BnInterface<IXXXService)
@@ -52,6 +69,13 @@ Java较Native端实现简单很多，通过Aidl工具来实现类似功能。所
 
 ## 服务的使用
 ### native服务
+```
+sp<IServiceManager> sm = defaultServiceManager();
+sp<IBinder> binder = sm->getService(String16("media.player"));
+
+sp<IMediaPlayerService> service =
+    interface_cast<IMediaPlayerService>(binder);
+```
 ### java服务
 ## LinkToDeath
 ## 内存管理
