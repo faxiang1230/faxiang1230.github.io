@@ -62,16 +62,16 @@ call strace  这一步需要CONFIG_KALLSYMS
 |w|Dumps tasks that are in uninterruptable (blocked) state|  
 |l|Shows a stack backtrace for all active CPUs.|  
 |m|Dumps current memory info to your console.|  
-|q|Dumps per CPU lists of all armed hrtimers (but NOT regular timer_list timers) and detailed information about all clockevent devices.|  
+|q|Dumps per CPU lists of all armed hrtimers(but NOT regular timer_list timers) and detailed information about all clockevent devices.|  
 |t| Dumps a list of current tasks and their information to your console|  
 ## printk
 新手入门必备的利器，容易使用，健壮，内核级的printf，不必多说了  
 有时候printk的log打印过多，一个是占用CPU，另外一个是容易淹没其他重要的消息，可以使用这个API`printk_ratelimited`限制输出的次数
 ```
 #define printk_ratelimit() __printk_ratelimit(__func__)
-
-这个函数应当在你认为打印一个可能会出现大量重复的消息之前调用，如果这个函数返回非零值, 继续打印你的消息, 否则跳过它。典型的调用如这样:
-
+```
+这个函数应当在你认为打印一个可能会出现大量重复的消息之前调用，如果这个函数返回非零值, 继续打印你的消息, 否则跳过它。example:
+```
 if (printk_ratelimit())
     printk(KERN_NOTICE "xxxx\n");
 ```
@@ -82,20 +82,22 @@ printk_ratelimit通过跟踪发向控制台的消息的数量和时间来工作�
 ```
 来控制消息的输出.
 
-`CONFIG_DYNAMIC_DEBUG`一个很容易被忽视的选项，比较容易少用，因为它只控制`pr_debug dev_dbg`形式的输出，其他的就不生效了
+`CONFIG_DYNAMIC_DEBUG`一个很容易被忽视的选项，比较容易少用，因为它只控制`pr_debug`和`dev_dbg`形式的输出，其他的就不生效了
 
 怎么打开/关闭调试的输出呢?官方文档`kernel/Documentation/dynamic-debug-howto.txt`
 
 ### 使用示例:
 
-* 查看可用的有哪些动态打印输出控制
+查看可用的有哪些动态打印输出控制
 ```
 cat <debugfs>/dynamic_debug/control
 # filename:lineno [module]function flags format
 init/main.c:741 [main]initcall_blacklisted =p "initcall %s blacklisted\012"
 ```
-* 控制其打开关闭
+控制其打开关闭
+
 可以使用`filename:lineno [module]function flags format`中的几个属性混合来限定开关
+
 ```
 enable the message at line 1603 of file svcsock.c
 nullarbor:~ # echo -n 'file svcsock.c line 1603 +p' >
@@ -107,6 +109,7 @@ nullarbor:~ # echo -n 'func svc_process -p' >
 ```
 
 有时候你可能遇到在console init之前内核就死掉了，那么可能需要这个来获取一些信息:
+
 ```
 CONFIG_EARLY_PRINTK
   early_printk
@@ -115,10 +118,10 @@ CONFIG_EARLY_PRINTK_DIRECT=y
 
 ## PSTORE
 
-pstore原意persistent store,是想要在系统重启之前能够保存之前的一些信息，重启之后能够再次获取到之前的数据,特别是panic的信息;
+pstore(persistent store)是想要在系统重启之前能够保存之前的一些信息，重启之后能够再次获取到之前的数据,特别是panic的信息;
 
 为什么不能保存到硬盘上或者是EMMC上呢？  
-这些设备都是通过内核控制的，如果内核死掉,只会做一些紧急的操作，一般而言不会再继续操作设备的;
+这些设备的操作大部分都是依赖于内核的IO栈，如果I/O栈出现问题，这种方式就废了，并且继续操作的话还有可能改变一些内存状态;
 
 所以这个动作不仅是内核需要一些操作，更重要的是内核下一层需要实现该功能，在x86上`APEI(Advanced Platform Error Interface)->ERST(Error Record Serialization Table)`提供接口，ARM平台上当时没有注意,不过Android是有last_kmg功能的，这个应该也是利用pstore的功能;
 
@@ -148,12 +151,13 @@ cat /sys/fs/pstore/console-ramoops
 ```
 ftrace的功能也挺好玩的，不过内核都说的比较清楚了，我就不做搬运工了`Documentation/ramoops.txt`
 ## KGDB
-KGDB的功能能够让用户像调试用户空间程序一样来调试内核，不过也有一些不便:在调试真机时必须使用两台机器，一台充当HOST，一台充当target;  
+KGDB的功能能够让用户像调试用户空间程序一样来调试内核，不过也有一些不便:在调试真机时必须使用两台机器，一台充当HOST，一台充当target;    
 两台机器需要连线通信啊,除了嵌入式板子还留有UART口之外，传统的PC现在都不再导出UART了，需要使用`usb->uart->交叉双绞线->uart->usb`来连接，那就是你需要两根线，而且两个是需要交叉的，这样两个的串口rx,tx才能和对方的tx，rx接通;  
 
 使用`usb->uart->交叉双绞线->uart->usb`来连接两台机器，配置中都需要支持usb转串的驱动  
 ### target配置
 内核配置:
+
 ```
 CONFIG_HAVE_ARCH_KGDB=y
 CONFIG_KGDB=y
@@ -162,35 +166,46 @@ CONFIG_KGDB_KDB=y
 CONFIG_USB_SERIAL=y
 CONFIG_USB_SERIAL_GENERIC=y
 ```
+
 关掉硬件看门狗,否则当kgdb断点时会触发看门狗重启系统
+
 ```
 高通:CONFIG_MSM_WATCHDOG_V2
 ```
+
 告诉KGDB使用USB设备连接:
+
 ```
 内核参数:kgdboc=ttyUSB0,115200
 或者
 启动之后告诉内核:echo ttyUSB0 > /sys/module/kgdboc/parameters/kgdboc
 ```
+
 怎么停止内核来连接上gdb:
+
 ```
 启动时即等待gdb连接:kgdbwait
 启动之后进入debug:sysrq-g或者等待gdb attach就好
 ```
+
 ### host配置
 使用minicom来和target通信，主要就是设置对应设备的波特率，位控，校验等和target保持一致；  
-如果内核没有等待gdb，那么就在minicom中向target发送break消息等待gdb  
+如果内核没有等待gdb，那么就在minicom中向target发送break消息等待gdb
+
 ```
 Press Ctrl+ A
 Press F
 Press G
 ```
+
 gdb连接target
+
 ```
 gdb ./vmlinux
 (gdb) set remotebaud 115200
 (gdb) target remote /dev/ttyUSB0
 ```
+
 开始吧，你的gdb该用起来了
 ## Ftrace
 内核调试主要有三种方式吧:kgdb为代表的gdb类调试,以ftrace为代表的tracepoint调试，以systemtap为代表的kprobe调试  
@@ -210,6 +225,7 @@ DDR frequency/regulator
 android有个很强大的工具systrace，干过系统调优的应该知道这个工具，它就是利用ftrace中的trace_maker来收集信息  
 
 CONFIG配置:
+
 ```
 CONFIG_TRACEPOINTS
 CONFIG_FUNCTION_TRACER
@@ -221,43 +237,53 @@ CONFIG_NOP_TRACER
 CONFIG_STACK_TRACER
 CONFIG_FUNCTION_GRAPH_TRACER
 ```
+
 使用:  
 使用之前建议瞄一眼`/sys/kernel/debug/tracing/README`
 
 ftrace中有很多的tracer，可以先选一中
+
 ```
 cd /sys/kernel/debug/tracing
 cat available_tracers
   blk mmiotrace function_graph wakeup_dl wakeup_rt wakeup function nop
 echo function_graph > current_tracer
 ```
+
 打开trace`echo 1 > tracing_on`  
 
 获取trace
+
 ```
 cat trace  将buffer中的数据dump出来并不清除
 或者
 cat trace_pipe  等待buffer数据并dump出来，读取之后将从buffer中清除
 这个也是环形buffer，只是移动指针的位置而已
 ```
+
 关闭trace`echo 0 > tracing_on`
 
 特殊用法:从dump中获取出ftrace的数据
+
 ```
 crash> extend ../crash/crash7.1.0/extensions/trace.so
 ../crash/crash-7.1.0/extensions/trace.so: shared object loaded
 crash> trace dump -t rawtracedata
 adroidbug$ trace-cmd report -l rawtracedata
 ```
+
 trace-cmd:
 
 website: http://git.kernel.org/cgit/linux/kernel/git/rostedt/trace-cmd.git/
 ## timer统计
 CONFIG配置：
+
 ```
 CONFIG_TIMER_STATS
 ```
+
 通过这个feature可以统计一段时间内的timer触发情况，对于power debug是比较有用的
+
 ```
 root@linux-S6:/proc# echo 1 > timer_stats
 root@linux-S6:/proc# echo 0 > timer_stats
@@ -272,18 +298,23 @@ Number，PID，preocess name，timer callback，how to setup timer
   249,     0 swapper/2        tick_nohz_restart (tick_sched_timer)
   667, 10995 Timer            futex_wait_queue_me (hrtimer_wakeup)
 ```
+
 ## list debug
 CONFIG配置:
+
 ```
 CONFIG_DEBUG_LIST
 ```
+
 遍历链表时将会做一些额外的检查;  
 新的node是否被重复添加，node是否被重复删除  
 ## Lock调试
 CONFIG配置:
+
 ```
 CONFIG_LOCKUP_DETECTOR
 ```
+
 软件死锁导致内核移植运行在内核模式>20秒,其他的任务没有机会运行，就是没响应;监测到软锁之后即当前的call strack将会被打印到dmesg中;  
 硬件死锁(禁止中断啊)将会导致CPU一致运行在内核模式>10秒，不会响应任何的中断；检测到之后dump call stack到dmesg中;  
 这个feature的消耗很小；  
@@ -295,11 +326,13 @@ hrtimer和NMI事件都可以通过sysctl watchdog_thresh来设置
 
 ## hung状态
 CONFIG配置:
+
 ```
 CONFIG_DETECT_HUNG_TASK
 CONFIG_BOOTPARAM_HUNG_TASK_PANIC_VALUE
 CONFIG_DEFAULT_HUNG_TASK_TIMEOUT  /proc/sys/kernel/hung_task_timeout_secs
 ```
+
 开启一个daemon程序`khungtaskd`周期性地记录任务的状态，当发现有任务处于uninterruptable状态超过2mins之后会打印进程call stack，根据是否`BOOTPARAM_HUNG_TASK_PANIC_VALUE=1`来重启系统或者只是简单地报告;  
 DEFAULT_HUNG_TASK_TIMEOUT默认设置为2mins，当设置成0时就是disable HUNG task检测功能;  
 ## mutex
