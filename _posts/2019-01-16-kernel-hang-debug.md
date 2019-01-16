@@ -1,7 +1,6 @@
 ---
 layout:     post
 title:      "内核hung debug"
-subtitle:    "自我约束"
 date:       2019-01-16 16:40:45
 author:     "faxiang1230"
 header-img: "img/post-bg-2015.jpg"
