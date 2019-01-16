@@ -337,3 +337,6 @@ CONFIG_DEFAULT_HUNG_TASK_TIMEOUT  /proc/sys/kernel/hung_task_timeout_secs
 DEFAULT_HUNG_TASK_TIMEOUT默认设置为2mins，当设置成0时就是disable HUNG task检测功能;  
 ## mutex
 ## spinlock
+## reference
+
+https://wiki.ubuntu.com/Kernel/Debugging
