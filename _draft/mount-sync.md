@@ -15,7 +15,7 @@ tags:
 
 2.mountflags will save in `super_block->s_flags`
 ## How to use:
-1.when filesystem use `file_operations->write = gerneric_file_write`,after write it will check if need sync:`IS_SYNC(inode)`,if yes,wait for write done
+1.when filesystem use `file_operations->write = generic_file_write`,after write it will check if need sync:`IS_SYNC(inode)`,if yes,wait for write done
 
 2.when filesystem not fill `file_operations->write`,kernel will use `do_sync_write->aio_write`,kernel implement default `generic_file_aio_write`,it will also check `IS_SYNC(inode)`,if yes,wait for write done
 ```
@@ -25,3 +25,7 @@ include/linux/fs.h
 					((inode)->i_flags & S_SYNC))
 ```
 3.when physical filesystem implement its `write/aio_write`,it will make sure that do sync when `MS_SYNCHRONOUS`  
+
+## issue
+linux support `exfat` filesystem via `fuse`(a userspace filesystem),it realize its `file_operations->aio_write` and not check `IS_SYNC`,so `mount` with `sync/dirsync` is uselessful.
+But `sync` options is important for someone unplug usb flash drive will lost data,so I want to use `sync` to save data(it will as the cost of pagecache effectiveness).
