@@ -14,8 +14,7 @@ ftrace中有一些主要的插件,下面会逐一介绍:
 event tracing,function trace,dynamic ftrace,kprobe,uprobe
 
 目前ftrace最经常被用来trace这也是它最初设计的功能，在新版的kernel中还被用来热升级，也就是livepatch;
-还有一种方式可以被用来进行Hook,最后一种使用的比较少，但是在内核4.14之后mainline已经支持这种[用法]
-(https://elixir.bootlin.com/linux/v4.15.18/source/Documentation/trace/ftrace-uses.rst)了。
+还有一种方式可以被用来进行Hook,最后一种使用的比较少，但是在内核4.14之后mainline已经支持这种[用法](https://elixir.bootlin.com/linux/v4.15.18/source/Documentation/trace/ftrace-uses.rst)了。
 
 ## tracepoint
 trace point有很长时间的历史了，在3.9以前在内核中还有`samples/tracepoint`的使用示例，但是自从ftrace发展很成熟之后就不再推荐使用了，所以这个示例也被mainline删除了。
@@ -86,16 +85,171 @@ static void probe_subsys_event(void *ignore,
 register_trace_subsys_event(probe_subsys_event, NULL);
 ```
 ## event trace
-使用 tracepoint 需要自己实现probe函数，而probe函数通常就是打印一些信息，每次都自己实现比较麻烦，而且还需要一个单独的内核模块来进行注册，不是很方便，所以在tracepoint上封装出了一个接口，probe函数采用固定的范式，根据tracepoint中组装成不同的probe函数，而probe函数的功能就是将信息输出到ring buffer中。
+使用 tracepoint 需要自己实现probe函数，而probe函数通常就是打印一些信息，每次都自己实现比较麻烦，而且还需要一个单独的内核模块来进行注册，不是很方便，所以在tracepoint上封装出了一个接口，probe函数采用固定的范式，根据tracepoint中组装成不同的probe函数，而probe函数的功能就是将信息输出到ring buffer中，这就是event trace做的最主要的工作。
 
-这个接口虽然抽象的比较好，但由于它本身的复杂性使用起来仍然是比较复杂，所以使用起来仍然比较复杂，[lwn上专门有三篇文章](https://lwn.net/Articles/379903/)来讲解怎么使用它的:
+除此之外，另外一个很重大的改进是将具有相同类型的:`TP_PROTO, TP_ARGS and TP_STRUCT__entry`的都归到一个类下，一方面形成一种树状的结构访问，另外一方面能够共用生成的赋值函数，打印函数，并且共享相同的存储类型，这样大大复用代码，减少了整个镜像的大小。  
 
+event trace接口虽然抽象的比较好，但由于它本身的复杂性使用起来仍然是比较复杂，所以使用起来仍然比较复杂，[lwn上专门有三篇文章](https://lwn.net/Articles/379903/)来讲解怎么使用它的.第一章将基础的event trace使用，第二篇将如何将相似的event trace使用class封装成一个模板来减少代码生成和复用，第三篇讲解如何在module中使用event trace.推荐自行阅读。
+
+目前tracepoint直接使用的已经非常少了，都是使用的在tracepoint上封装的event trace接口。
+
+- 1.一个宏实现 trace event
+
+```
+TRACE_EVENT(foo_bar,
+       TP_PROTO(char *foo, int bar),
+       TP_ARGS(foo, bar),
+       TP_STRUCT__entry(
+               __array(        char,   foo,    10        )
+               __field(        int,    bar              )
+       ),
+       TP_fast_assign(
+               strncpy(__entry->foo, foo, 10);
+               __entry->bar    = bar;
+       ),
+       TP_printk("foo %s %d", __entry->foo, __entry->bar)
+);
+```
+`TP_PROTO` 定义函数的原型。 也就是将来的 probe 函数带有两个参数，一个 char *， 一个 int 类型。
+
+`TP_ARGS` 定义函数的参数，注意与上一个的区别，上面只是定义了函数的类型，它可以用来做类型转换。
+
+`TP_STRUCT__entry` 定义记录在 ftrace 环形内存中数据的类型。它会被替换到定义一个结构体的变量 `__array ``代表数组类型，__field 是普通类型，它们分别等同于`` char foo[10], int bar`，我们会在后面看到它们怎么被替换到某个结构体中。
+
+`TP_fast_assign` 说明将来在 probe 中这些 entry 会怎么记录在环形缓存中。
+
+`TP_printk` 当我们通过 debugfs 查看 trace 的结果是，环形缓存中的数据并不是直接以二进制显示的，而是结构化输出的。`TP_printk `会被宏替换到输出的函数中。
+
+通过这一个定义，多次宏替换，生成需要进行 event tracing 的所有函数，如果要是手写的话，可能会产生很多很多重复的代码。这个宏就是实现 event tracing 的核心。所有的事情用这一个定义就可以完成，TRACE_EVENT 被反复 `#define #undef` 用不同的代码模板制造出需要的代码。
+
+第一次包含这个头文件，把 TRACE_EVENT 定义成 tracepoint。这是在 include/tracepoint.h 中实现的，如下:
+
+- 2.实现 tracepoint
+
+```
+#define TRACE_EVENT(name, proto, args, struct, assign, print)   \
+       DECLARE_TRACE(name, PARAMS(proto), PARAMS(args))
+```
+TRACE_EVENT 被定义成 DECLARE_TRACE ，而 DECLARE_TRACE 正是tracepoint需要的两个宏当中的一个，这里可以看到 event_tracing 确实是建立在 tracepoint 上的。
+
+这个 TRACE_EVENT 宏已经被替换了，内核接下来会再次包含这个头文件，然后重新定义这个宏，以便把这个宏再展开成其它的代码，一个头文件再包含自己，这样不是形成一个死循环了么，事实上内核开发者使用一些标志巧妙的避开了这样的错误。TRACE_EVENT 在整个预编译过程中要被重新定义很多次，然后重新包含这个头文件，从而产成不同的需要的代码。这种宏虽然复杂，也不直观，但是它减少了代码的重复。试想，内核中也很多很多 event tracing，如果每一个子系统的定义自己的，那会产生多少类似的代码实现类似的功能。
+
+第二次包含这个头文件，接下来会从新定义 TRACE_EVENT，以便产生其它代码。这是在 include/trace/define_trace.h，如下.
+
+- 3.实现 tracepoint（续）
+
+```
+#undef TRACE_EVENT
+#define TRACE_EVENT(name, proto, args, tstruct, assign, print)  \
+       DEFINE_TRACE(name)
+```
+这里先 undef 了 TRACE_EVENT 的定义，然后又重行 define 它。这里 TRACE_EVENT 又被定义成 DEFINE_TRACE，而 DEFINE_TRACE 是上一章说的另一个宏。通过这两次宏展开，一个完整的 tracepoint 已经被实现了。
+
+接下来 TRACE_EVENT 将致力于实现一个通用的 probe 函数。这个 probe 函数使用 ftrace 的环形缓存来输出数据，TRACE_EVENT 还将实现 debugfs 的接口，以便交互和控制。
+
+第三次这个宏在 include/trace/ftrace.h 里 , 它会产生一个记录在环形缓存中的数据类型，在这个示例下面的数据类型。前面提到的 TRACE_EVENT 宏中的 `TP_STRUCT__entry `被定义成了这个数据结构。第一个元素是固定存在每条 trace 的记录中的。其余 foo 和 bar 是自定义的两个数据类型。它们其实是 probe 函数的两个参数。 probe 函数会将这两个参数记录到环形缓存区中。
+
+- 4.记录在 ring buffer 中的数据类型
+
+```
+struct ftrace_raw_foo_bar {
+       struct trace_entry ent;
+        char foo[10];
+       int bar;
+       char __data[0];
+};
+```
+接下来还会有接连几次重新定义这个宏，分别产生用于输出这条记录格式的相关函数，可以通过 debugfs 的 format 查看，我们不再关注，其中主要关注 probe 函数，也就是用于向环形缓存区写数据的函数，这个函数就是通过 tracepoint 注册的 probe 函数，用于将来被注册的 probe 函数，该函数在每次事件发生时记录相关的数据（foo, bar）到 ring buffer。这个函数是宏替换产生的，并不存在以内核代码中。可以通过 gcc 的 -E 来产生这个代码片段，事实上前文提到的也都是通过 gcc 的 -E 选项显示出来的。另一个比较重要的函数是读 debugfs 中的 trace 文件时候的回调函数。这个函数格式化环形缓存区中的输出。转化为用户易读取的格式。这个函数由 TP_printk 而来。
+
+- 5.probe函数
+
+```
+static void ftrace_raw_event_id_foo_bar (struct ftrace_event_call *event_call,
+                                        char *foo, int bar)
+{
+ …
+ entry = ring_buffer_event_data(event);
+ { strncpy(entry->foo, foo, 10);
+   entry->bar = bar;; }
+  f (!filter_current_check_discard(buffer, event_call, entry, event))
+      trace_nowake_buffer_unlock_commit(buffer, event, irq_flags, pc);
+};
+```
+
+最后，这些实现的所有函数被记录在6中的数据结构中，这个结构供 debugfs 文件系统使用。用户的与 debugfs 的交互将根据这张表来找到相应的操作，如本章开头示例的操作是，先使能这个事件的 trace event，也就是7中的命令，将通过 debugfs 调用 event_foo_bar.regfunc 这个函数，如清单 17，它将注册 ftrace_raw_event_id_foo_bar 这个 probe 函数到 probe 点。然后关闭就会调用 event_foo_bar.unregfunc 注销函数。tprobe 函数会在每次被调用是输出记录到 ring buffer，读取 trace 结果存在 .event 字段中的子系统实现。这样整个 event traceing 的实现就清晰了。
+
+- 6.与 debugfs 交互数据结构
+
+```
+struct ftrace_event_call event_foo_bar = {
+       .name = "foo_bar",
+       .system = "sample",
+       .event = &ftrace_event_type_foo_bar,
+       .raw_init = trace_event_raw_init,
+       .regfunc = ftrace_raw_reg_event_foo_bar,
+       .unregfunc = ftrace_raw_unreg_event_foo_bar ,
+       .show_format = ftrace_format_foo_bar ,
+       .define_fields = ftrace_define_fields_foo_bar ,
+       .profile_enable = ftrace_profile_enable_foo_bar,
+       .profile_disable = ftrace_profile_disable_foo_bar,
+};
+```
+
+- 7.注册注销函数
+
+```
+static int ftrace_raw_reg_event_foo_bar (struct ftrace_event_call *unused)
+{
+       return register_trace_foo_bar ( ftrace_raw_event_foo_bar );
+}
+
+static void ftrace_raw_event_foo_bar (char *foo, int bar)
+{
+       ftrace_raw_event_id_foo_bar (& event_foo_bar , foo, bar);
+}
+```
 
 ## tracer
 ### function
 ### nop
 ### function_graph
-## dynamic trace
+## dynamic ftrace
+
+静态的ftrace就是使用类似于`gcc -pg`的机制在函数头部插入`mcount`,在其中会检查是否设置了`ftrace_trace_function`,如果没有设置的话,`ftrace_trace_function`就是指向一个`ftrace_stub`,那么直接返回。而如果设置了，执行`ftrace_trace_function`.原理非常简单，只是其中的实现依赖于架构相关，伪代码如下:
+```
+void ftrace_stub(void)
+{
+	return;
+}
+void mcount(void)
+{
+	/* save any bare state needed in order to do initial checking */
+
+	extern void (*ftrace_trace_function)(unsigned long, unsigned long);
+	if (ftrace_trace_function != ftrace_stub)
+		goto do_trace;
+	/* restore any bare state */
+	return;
+
+do_trace:
+	/* save all state needed by the ABI (see paragraph above) */
+
+	unsigned long frompc = ...;
+	unsigned long selfpc = <return address> - MCOUNT_INSN_SIZE;
+	ftrace_trace_function(frompc, selfpc);
+
+	/* restore all state needed by the ABI */
+}
+```
+而动态ftrace所要做的就是对这种情况进行优化，通常情况下并没有人打开trace,每次调用`mcount`都会造成性能损失，这时候使用类似于`nop`的指令来代替`mcount`.当有人打开trace的时候，将`mcount`的指令再修改回来。对于没有打开trace的时候进行了很大的有话提升。
+
+实现方式:
+
+- 1.编译的时候，将所有function的`mcount`地址汇聚到一个代码段中，起始地址`__stop_mcount_loc`到结束地址`__start_mcount_loc`
+- 2.系统初始化的时候，为每一个`mcount`地址都分配一个`struct dyn_ftrace`,保存着名称和地址，将地址中的`mcount`替换为`nop`指令;
+	对于module,注册module notify,当module插入的时候动态分配`struct dyn_ftrace`来保存其地址信息。在module卸载的时候删除其信息。
+- 3.在激活的时候，再将`mcount`恢复到函数原始的代码位置，检查是那种trace function.
+
 ## kprobe
 kprobe 是很早前就存在于内核中的一种动态 trace 工具。kprobe 本身利用了 int 3（在 x86 中）实现了 probe 点，这对应于 A 部分的功能。使用 kprobe 需要用户自己实现 kernel module 来注册 probe 函数。可以看出 kprobe 并没有统一的 B、C 和 D。使用起来用户需要自己实现很多东西。不是很灵活。而在 function trace 出现后，kprobe 借用了它的一部分设计模式，实现了统一的 probe 函数（对应于图中的 B），并利用了 function trace 的环形缓存和用户接口部分，也就是 C 和 D 部分功能，用户可以使用读写 debugfs 中相关文件就可以控制 kprobe 的注册注销以及读取结果，非常方便。
 ## uprobe
