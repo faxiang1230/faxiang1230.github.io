@@ -1,23 +1,29 @@
 # ftrace
-ftrace是function trace的简称，代表的是一个trace体系框架,其中包括:  
-[image](../images/ftrace-frame.png)  
+首先trace是跟踪的意思，通常被运维或者性能优化的同学使用，用来跟踪系统的状态，从用户态程序到内核中的trace.
+和trace相似的有profile(剖析),profile通常是周期性查询cpu上的当前指令地址，而trace通常是在执行路径上埋桩,执行过程中输出采集。  
+
+ftrace是function trace的简称，linux中trace的代名词，代表的是一个trace体系框架,可以划分成这四个组件:  
+![image](../images/ftrace-frame.png)  
 1.如何创建probe点  
 2.probe之后处理函数  
 3.probe中处理函数输出结果到ring buffer  
 4.ring buffer如何向用户输出结果.  
-其中1和2实现方式可能会不一样，但是ftrace都是通过debugfs向用户空间提供接口，其他的所有插件都利用了3和4的基础结构。  
+其中3和4是基础结构,即通过debugfs向用户空间提供接口，而1和2实现方式可能会不一样，我更想将1和2理解成不同的插件,所有插件都利用了3和4的基础结构。  
 
-主要的插件:  
+ftrace中有一些主要的插件,下面会逐一介绍:  
 event tracing,function trace,dynamic ftrace,kprobe,uprobe
 
-主要用途:  
-目前ftrace最经常被用来trace这也是它最初设计的功能，在新版的kernel中还被用用来热升级，也就是livepatch;还有一种方式可以被用来进行Hook,最后一种使用的比较少。
+目前ftrace最经常被用来trace这也是它最初设计的功能，在新版的kernel中还被用来热升级，也就是livepatch;
+还有一种方式可以被用来进行Hook,最后一种使用的比较少，但是在内核4.14之后mainline已经支持这种[用法]
+(https://elixir.bootlin.com/linux/v4.15.18/source/Documentation/trace/ftrace-uses.rst)了。
 
 ## tracepoint
-trace point有很长时间的历史了，在3.10以前在内核中还有`samples/tracepoint`的使用示例，但是自从ftrace发展很成熟之后就不再推荐使用了，所以这个示例也被mainline删除了。
+trace point有很长时间的历史了，在3.9以前在内核中还有`samples/tracepoint`的使用示例，但是自从ftrace发展很成熟之后就不再推荐使用了，所以这个示例也被mainline删除了。
 
-trace point就是开发人员手动地静态的在内核代码中插桩，之后可以向这个点注册处理函数。代码片段示例:
+trace point就是开发人员手动地静态的在内核代码中插桩，之后可以向这个点注册处理函数。
+在module中，会将tracepoint放进`__tracepoints`section中,名称字符串放进去`__tracepoints_str`,在module加载的时候会解析`__tracepoints`section的内容；内核初始化的时候注册了module事件处理callback`tracepoint_module_nb`,然后将tracepoint信息放到一个hash表中维护。之后注册tracepoint的处理函数只是将处理函数加入到tracepoint上的函数指针数组上，一个tracepoint支持多个callback.在函数调用过程中检查是否有callback,逐个调用。
 
+### 代码片段示例:
 预备工作的宏:
 ```
 #define DEFINE_TRACE_FN(name, reg, unreg)				\
