@@ -253,9 +253,10 @@ Kernel memory tracer: 内存 tracer 主要用来跟踪 slab allocator 的分配�
 Workqueue statistical tracer：这是一个 statistic tracer，统计系统中所有的 workqueue 的工作情况，比如有多少个 work 被插入 workqueue，多少个已经被执行等。开发人员可以以此来决定具体的 workqueue 实现，比如是使用 single threaded workqueue 还是 per cpu workqueue.
 
 Event tracer: 跟踪系统事件，比如 timer，系统调用，中断等。
-
-### function
 ### nop
+nop tracer并没有实质性的处理，被用来停止其他的tracer，它也通常作为默认的tracer在初始化时设置的。设置nop的时候就可以打开trace event了，其他的tracer都和trace event冲突。
+### function
+
 ### function_graph
 ## dynamic ftrace
 
