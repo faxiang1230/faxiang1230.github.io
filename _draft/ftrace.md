@@ -87,11 +87,19 @@ register_trace_subsys_event(probe_subsys_event, NULL);
 ## event trace
 使用 tracepoint 需要自己实现probe函数，而probe函数通常就是打印一些信息，每次都自己实现比较麻烦，而且还需要一个单独的内核模块来进行注册，不是很方便，所以在tracepoint上封装出了一个接口，probe函数采用固定的范式，根据tracepoint中组装成不同的probe函数，而probe函数的功能就是将信息输出到ring buffer中，这就是event trace做的最主要的工作。
 
-除此之外，另外一个很重大的改进是将具有相同类型的:`TP_PROTO, TP_ARGS and TP_STRUCT__entry`的都归到一个类下，一方面形成一种树状的结构访问，另外一方面能够共用生成的赋值函数，打印函数，并且共享相同的存储类型，这样大大复用代码，减少了整个镜像的大小。  
+除此之外，另外一个很重大的改进是将具有相同类型的:`TP_PROTO, TP_ARGS, TP_STRUCT__entry`的都归到一个类下，一方面形成一种树状的结构访问，另外一方面能够共用生成的赋值函数，打印函数，并且共享相同的存储类型，这样大大复用代码，减少了整个镜像的大小。  
 
 event trace接口虽然抽象的比较好，但由于它本身的复杂性使用起来仍然是比较复杂，所以使用起来仍然比较复杂，[lwn上专门有三篇文章](https://lwn.net/Articles/379903/)来讲解怎么使用它的.第一章将基础的event trace使用，第二篇将如何将相似的event trace使用class封装成一个模板来减少代码生成和复用，第三篇讲解如何在module中使用event trace.推荐自行阅读。
 
 目前tracepoint直接使用的已经非常少了，都是使用的在tracepoint上封装的event trace接口。
+
+下面是根据`samples/trace_events/trace-events-sample.h`中的示例来查看一个trace event是怎么生成的。
+
+*Tips*:  
+自己可以写个简单的demo module看看，使用`EXTRA_CFLAGS='-save-temps'`保存预处理文件`.i`,之后就能在`/usr/lib/modules/$(uname -r)/build/{your_modulename.i}`中看到都生成了哪些代码。如果报错，找不到`your_modulename.h`,把它拷贝到`/usr/lib/modules/$(uname -r)/build/include/trace/`下。
+```
+make -C /usr/lib/modules/$(shell uname -r)/build M=$(shell pwd) modules EXTRA_CFLAGS='-save-temps'
+```
 
 - 1.一个宏实现 trace event
 
@@ -110,9 +118,9 @@ TRACE_EVENT(foo_bar,
        TP_printk("foo %s %d", __entry->foo, __entry->bar)
 );
 ```
-`TP_PROTO` 定义函数的原型。 也就是将来的 probe 函数带有两个参数，一个 char *， 一个 int 类型。
+`TP_PROTO` 定义函数的原型。生成`trace_foo_bar(char *foo, int bar)`函数指针类型。
 
-`TP_ARGS` 定义函数的参数，注意与上一个的区别，上面只是定义了函数的类型，它可以用来做类型转换。
+`TP_ARGS` 定义函数的参数，一定要与`TP_PROTO`中的参数名称一致;与上一个的区别，上面只是定义了函数的类型，它可以用来做类型转换。
 
 `TP_STRUCT__entry` 定义记录在 ftrace 环形内存中数据的类型。它会被替换到定义一个结构体的变量 `__array ``代表数组类型，__field 是普通类型，它们分别等同于`` char foo[10], int bar`，我们会在后面看到它们怎么被替换到某个结构体中。
 
@@ -210,6 +218,42 @@ static void ftrace_raw_event_foo_bar (char *foo, int bar)
 ```
 
 ## tracer
+Tracer有很多种，主要几大类:
+```
+函数类：function， function_graph， stack
+延时类：irqsoff， preemptoff， preemptirqsoff， wakeup， wakeup_rt， waktup_dl
+其他类：nop， mmiotrace， blk
+```
+Function tracer 和 Function graph tracer: 跟踪函数调用。
+
+Schedule switch tracer: 跟踪进程调度情况。
+
+Wakeup tracer：跟踪进程的调度延迟，即高优先级进程从进入 ready 状态到获得 CPU 的延迟时间。该 tracer 只针对实时进程。
+
+Irqsoff tracer：当中断被禁止时，系统无法相应外部事件，比如键盘和鼠标，时钟也无法产生 tick 中断。这意味着系统响应延迟，irqsoff 这个 tracer 能够跟踪并记录内核中哪些函数禁止了中断，对于其中中断禁止时间最长的，irqsoff 将在 log 文件的第一行标示出来，从而使开发人员可以迅速定位造成响应延迟的罪魁祸首。
+
+Preemptoff tracer：和前一个 tracer 类似，preemptoff tracer 跟踪并记录禁止内核抢占的函数，并清晰地显示出禁止抢占时间最长的内核函数。
+
+Preemptirqsoff tracer: 同上，跟踪和记录禁止中断或者禁止抢占的内核函数，以及禁止时间最长的函数。
+
+Branch tracer: 跟踪内核程序中的 likely/unlikely 分支预测命中率情况。 Branch tracer 能够记录这些分支语句有多少次预测成功。从而为优化程序提供线索。
+
+Hardware branch tracer：利用处理器的分支跟踪能力，实现硬件级别的指令跳转记录。在 x86 上，主要利用了 BTS 这个特性。
+
+Initcall tracer：记录系统在 boot 阶段所调用的 init call 。
+
+Mmiotrace tracer：记录 memory map IO 的相关信息。
+
+Power tracer：记录系统电源管理相关的信息。
+
+Sysprof tracer：缺省情况下，sysprof tracer 每隔 1 msec 对内核进行一次采样，记录函数调用和堆栈信息。
+
+Kernel memory tracer: 内存 tracer 主要用来跟踪 slab allocator 的分配情况。包括 kfree，kmem_cache_alloc 等 API 的调用情况，用户程序可以根据 tracer 收集到的信息分析内部碎片情况，找出内存分配最频繁的代码片断，等等。
+
+Workqueue statistical tracer：这是一个 statistic tracer，统计系统中所有的 workqueue 的工作情况，比如有多少个 work 被插入 workqueue，多少个已经被执行等。开发人员可以以此来决定具体的 workqueue 实现，比如是使用 single threaded workqueue 还是 per cpu workqueue.
+
+Event tracer: 跟踪系统事件，比如 timer，系统调用，中断等。
+
 ### function
 ### nop
 ### function_graph
@@ -241,7 +285,8 @@ do_trace:
 	/* restore all state needed by the ABI */
 }
 ```
-而动态ftrace所要做的就是对这种情况进行优化，通常情况下并没有人打开trace,每次调用`mcount`都会造成性能损失，这时候使用类似于`nop`的指令来代替`mcount`.当有人打开trace的时候，将`mcount`的指令再修改回来。对于没有打开trace的时候进行了很大的有话提升。
+而动态ftrace所要做的就是针对这种情况进行优化，通常情况下并没有人打开trace,每次调用`mcount`都会造成性能损失，这时候使用类似于`nop`的指令来代替`mcount`.
+当有人打开trace的时候，将`mcount`的指令再修改回来。对于没有打开trace的时候进行了很大的有话提升。
 
 实现方式:
 
@@ -310,9 +355,80 @@ int main(int argc, char* argv[]) {
 
 补丁（如下所示）解决了echo问题，但我仍然不明白为什么echo先前打破了write()不是。
 
->https://lkml.org/lkml/2016/5/16/493
+>https://lkml.org/lkml/2016/5/16/493  
 >http://zgserver.com/ftraceechofunction_graphcurrent_tracer.html
 
+## debugfs中接口
+```
+通用配置：
+available_tracers-------------当前编译及内核的跟踪器列表，current_tracer必须是这里面支持的跟踪器,记录向内核注册的tracer。
+current_tracer----------------用于设置或者显示当前使用的跟踪器列表。系统启动缺省值为nop，使用echo将跟踪器名字写入即可打开。可以通过写入nop重置跟踪器。
+
+buffer_size_kb----------------用于设置单个CPU所使用的跟踪缓存的大小。跟踪缓存为RingBuffer形式，如果跟踪太多，旧的信息会被新的跟踪信息覆盖掉。需要先将current_trace设置为nop才可以。
+buffer_total_size_kb----------显示所有的跟踪缓存大小，不同之处在于buffer_size_kb是单个CPU的，buffer_total_size_kb是所有CPU的和。
+
+free_buffer-------------------此文件用于在一个进程被关闭后，同时释放RingBuffer内存，并将调整大小到最小值。
+
+tracing_cpumask---------------可以通过此文件设置允许跟踪特定CPU，二进制格式。
+per_cpu-----------------------CPU相关的trace信息，包括stats、trace、trace_pipe和trace_pipe_raw。
+　　　　　　　　　　　　　　　　　　stats：当前CPU的trace统计信息
+　　　　　　　　　　　　　　　　　　trace：当前CPU的trace文件。
+　　　　　　　　　　　　　　　　　　trace_pipe：当前CPU的trace_pipe文件。
+printk_formats----------------提供给工具读取原始格式trace的文件。
+saved_cmdlines----------------存放pid对应的comm名称作为ftrace的cache，这样ftrace中不光能显示pid还能显示comm。
+snapshot----------------------是对trace的snapshot。
+                              echo 0清空缓存，并释放对应内存。
+                              echo 1进行对当前trace进行snapshot，如没有内存则分配。
+                              echo 2清空缓存，不释放也不分配内存。
+
+trace-------------------------查看获取到的跟踪信息的接口，echo > trace可以清空当前RingBuffer。
+trace_pipe--------------------输出和trace一样的内容，但是此文件输出Trace同时将RingBuffer中的内容删除，这样就避免了RingBuffer的溢出。可以通过cat trace_pipe > trace.txt &保存文件。
+
+trace_clock-------------------显示当前Trace的timestamp所基于的时钟，默认使用local时钟。local：默认时钟；可能无法在不同CPU间同步；global：不同CUP间同步，但是可能比local慢；counter：这是一个跨CPU计数器，需要分析不同CPU间event顺序比较有效。
+trace_marker------------------从用户空间写入标记到trace中，用于用户空间行为和内核时间同步。
+trace_marker_raw--------------以二进制格式写入到trace中。
+
+trace_options-----------------控制Trace打印内容或者操作跟踪器，可以通过trace_options添加很多附加信息。
+options-----------------------trace选项的一系列文件，和trace_options对应。
+
+trace_stat/-------------------每个CPU的Trace统计信息
+tracing_max_latency-----------记录Tracer的最大延时，
+tracing_on--------------------用于控制跟踪打开或停止，0停止跟踪，1继续跟踪。
+tracing_thresh----------------延时记录Trace的阈值，当延时超过此值时才开始记录Trace。单位是ms，只有非0才起作用。
+
+Events配置：
+available_events--------------列出系统中所有可用的Trace events，分两个层级，用冒号隔开。
+events/-----------------------系统Trace events目录，在每个events下面都有enable、filter和fotmat。enable是开关；format是events的格式，然后根据格式设置 filter。
+set_event---------------------将Trace events名称直接写入set_event就可以打开。
+set_event_pid-----------------指定追踪特定进程的events。
+
+Function配置：
+available_filter_functions----记录了当前可以跟踪的内核函数，不在该文件中列出的函数，无法跟踪其活动。
+dyn_ftrace_total_info---------显示available_filter_functins中跟中函数的数目，两者一致。
+enabled_functions-------------显示有回调附着的函数名称。
+function_profile_enabled------打开此选项，在trace_stat中就会显示function的统计信息。
+set_ftrace_filter-------------用于显示指定要跟踪的函数
+set_ftrace_notrace------------用于指定不跟踪的函数，缺省为空。
+set_ftrace_pid----------------用于指定要追踪特定进程的函数。
+
+Function graph配置：
+max_graph_depth---------------函数嵌套的最大深度。
+set_graph_function------------设置要清晰显示调用关系的函数，在使用function_graph跟踪器是使用，缺省对所有函数都生成调用关系。
+set_graph_notrace-------------不跟踪特定的函数嵌套调用。
+
+Stack trace设置：
+stack_max_size----------------当使用stack跟踪器时，记录产生过的最大stack size
+stack_trace-------------------显示stack的back trace
+stack_trace_filter------------设置stack tracer不检查的函数名称
+
+Kernel dynamic events设置:
+kprobe_events
+kprobe_profile
+
+Userspace dynamic events设置:
+uprobe_events
+uprobe_profile
+```
 ## 参考
 https://www.ibm.com/developerworks/cn/linux/1609_houp_ftrace/  
 https://static.lwn.net/kerneldoc/trace/ftrace-uses.html  
