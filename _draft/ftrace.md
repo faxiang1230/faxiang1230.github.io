@@ -256,11 +256,17 @@ Event tracer: 跟踪系统事件，比如 timer，系统调用，中断等。
 ### nop
 nop tracer并没有实质性的处理，被用来停止其他的tracer，它也通常作为默认的tracer在初始化时设置的。设置nop的时候就可以打开trace event了，其他的tracer都和trace event冲突。
 ### function
+function tracer实现的基本原理就是`gcc -pg`,在所有函数的头部插入`mcount`,而它只是个插桩.由于mcount不能记录参数，现在都是使用的`fentry`,可以使用`gcc -pg -mfentry`来插入(gcc 4.6之后才有的新功能)。所以我们在内核中是找不到`mcount`和`fentry`的实现的，它是由`gcc`来完成的。它插入的是什么呢?
+![image](../images/fentry-without-dynamic.png)
 
-### function_graph
-## dynamic ftrace
 
-静态的ftrace就是使用类似于`gcc -pg`的机制在函数头部插入`mcount`,在其中会检查是否设置了`ftrace_trace_function`,如果没有设置的话,`ftrace_trace_function`就是指向一个`ftrace_stub`,那么直接返回。而如果设置了，执行`ftrace_trace_function`.原理非常简单，只是其中的实现依赖于架构相关，伪代码如下:
+- 内核怎么替换`gcc`的`mcount/fentry`的呢？
+使用`gcc -pg`时，会在编译阶段就插入`call mcount`,可以使用`gcc -S`来验证一下，而真正链接的时候只要保证能够优先链接到arch自己实现的函数就好了。在gcc中有一种可以声明为`weak`的，它在链接的时候优先级要低很多，可以查看`glibc`中的`mcount`声明`weak_alias (_mcount, mcount)`,所以在编译的时候就插入内核实现的`mcount`了.  
+另外一种方式可以验证这个猜想，在自己的代码中实现`mcount`,通过最后的反汇编来验证是否是自己的`mcount`.
+
+- 插桩的用途做什么
+在上图中的反汇编其实就是在`entry64.S/mcount.S/ftrace_64.S`中实现的函数，不管在哪个文件中，干得活可以用下面的伪代码来表示:
+在其中会检查是否设置了`ftrace_trace_function`,如果没有设置的话,`ftrace_trace_function`就是指向一个`ftrace_stub`,那么直接返回。而如果设置了，执行`ftrace_trace_function`.原理非常简单，只是其中的实现依赖于架构相关，伪代码如下:
 ```
 void ftrace_stub(void)
 {
@@ -286,6 +292,21 @@ do_trace:
 	/* restore all state needed by the ABI */
 }
 ```
+编译时:
+```shell
+Makefile
+ifdef CONFIG_FUNCTION_TRACER
+ifdef CONFIG_HAVE_FENTRY
+CC_USING_FENTRY	:= $(call cc-option, -mfentry -DCC_USING_FENTRY)
+endif
+KBUILD_CFLAGS	+= -pg $(CC_USING_FENTRY)
+```
+链接时:
+运行时:
+### function_graph
+## dynamic ftrace
+
+静态的ftrace就是使用类似于`gcc -pg`的机制在函数头部插入`mcount`,
 而动态ftrace所要做的就是针对这种情况进行优化，通常情况下并没有人打开trace,每次调用`mcount`都会造成性能损失，这时候使用类似于`nop`的指令来代替`mcount`.
 当有人打开trace的时候，将`mcount`的指令再修改回来。对于没有打开trace的时候进行了很大的有话提升。
 
@@ -295,6 +316,8 @@ do_trace:
 - 2.系统初始化的时候，为每一个`mcount`地址都分配一个`struct dyn_ftrace`,保存着名称和地址，将地址中的`mcount`替换为`nop`指令;
 	对于module,注册module notify,当module插入的时候动态分配`struct dyn_ftrace`来保存其地址信息。在module卸载的时候删除其信息。
 - 3.在激活的时候，再将`mcount`恢复到函数原始的代码位置，检查是那种trace function.
+
+![image](../images/ftrace-with-dynamic.png)
 
 ## kprobe
 kprobe 是很早前就存在于内核中的一种动态 trace 工具。kprobe 本身利用了 int 3（在 x86 中）实现了 probe 点，这对应于 A 部分的功能。使用 kprobe 需要用户自己实现 kernel module 来注册 probe 函数。可以看出 kprobe 并没有统一的 B、C 和 D。使用起来用户需要自己实现很多东西。不是很灵活。而在 function trace 出现后，kprobe 借用了它的一部分设计模式，实现了统一的 probe 函数（对应于图中的 B），并利用了 function trace 的环形缓存和用户接口部分，也就是 C 和 D 部分功能，用户可以使用读写 debugfs 中相关文件就可以控制 kprobe 的注册注销以及读取结果，非常方便。
