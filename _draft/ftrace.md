@@ -267,6 +267,7 @@ function tracer实现的基本原理就是`gcc -pg`,在所有函数的头部插�
 - 插桩的用途做什么
 在上图中的反汇编其实就是在`entry64.S/mcount.S/ftrace_64.S`中实现的函数，不管在哪个文件中，干得活可以用下面的伪代码来表示:
 在其中会检查是否设置了`ftrace_trace_function`,如果没有设置的话,`ftrace_trace_function`就是指向一个`ftrace_stub`,那么直接返回。而如果设置了，执行`ftrace_trace_function`.原理非常简单，只是其中的实现依赖于架构相关，伪代码如下:
+
 ```
 void ftrace_stub(void)
 {
@@ -306,18 +307,70 @@ KBUILD_CFLAGS	+= -pg $(CC_USING_FENTRY)
 kernel/trace/trace_functions.c
 init_function_trace->register_tracer(&function_trace);
 ```
-通过`echo function >current_tracer`使能当前的tracer
-```
+通过`echo function >current_tracer`使能当前的tracer,会先将原来的tracer停掉，中间通过`nop tracer`过渡一下，之后使用function tracer的init函数`function_trace_init`来开始进行trace:通过`register_ftrace_function`将处理函数挂到`ftrace_ops_list`链表上，之后在`update_ftrace_function`中更新`ftrace_trace_function`.
 
+如何被执行:
+在没有使能`dynamic ftrace`，每个可以被trace的函数都会调用`mcount`,伪代码见上面的`插桩的用途做什么`,在x86_64上的实现如下:
 ```
-链接时:
-运行时:
+ENTRY(function_hook)
+	cmpl $0, function_trace_stop       //如果停止了trace,什么也不做直接ret
+	jne  ftrace_stub
+
+	cmpq $ftrace_stub, ftrace_trace_function     //没有设置ftrace_trace_function，直接ret
+	jnz trace
+GLOBAL(ftrace_stub)        //什么也不做，直接返回
+	retq
+
+trace:              //当使用function trace，先保存寄存器状态，之后填充rdi,rsi,rdx,rcx
+	MCOUNT_SAVE_FRAME  //保存所有的寄存器现场到栈上，frompc存到rdx和RIP(%rsp)
+
+	movq RIP(%rsp), %rdi        //frompc放到rdi中，作为第一个参数
+
+	movq 8(%rbp), %rsi  	// a() {b()},b(){ call mcount},我们现在位于mcount中，将从b返回到a的地址放到rsi,作为parent_ip,就是a()+offset
+	subq $MCOUNT_INSN_SIZE, %rdi  //每个函数调用mcount前是调用了几条指令的，消除偏移就是函数的入口地址，即ip
+
+	call   *ftrace_trace_function   //上面显示赋值了rdi,rsi,而ftrace_trace_function是void (*ftrace_func_t)(ip, parent_ip, struct ftrace_ops *op, struct pt_regs *regs),rdx保存了frompc，k看起来rcx是没有设置，不能使用。
+
+	MCOUNT_RESTORE_FRAME          //从栈上恢复寄存器
+
+	jmp ftrace_stub              //返回
+END(function_hook)
+```
+*上面传给function的第三个和第四个参数怎么设置的还是没有弄清楚。*
+
+小节:利用`gcc -pg`插桩，实现自己的`mcount`,注册并激活function tracer，更新函数指针到`ftrace_trace_function`，
+函数执行时保存寄存器到栈上，根据ip和parent_ip打印符号到ring buffer中，从栈上恢复寄存器。
+
 ### function_graph
 ## dynamic ftrace
 
-静态的ftrace就是使用类似于`gcc -pg`的机制在函数头部插入`mcount`,
-而动态ftrace所要做的就是针对这种情况进行优化，通常情况下并没有人打开trace,每次调用`mcount`都会造成性能损失，这时候使用类似于`nop`的指令来代替`mcount`.
-当有人打开trace的时候，将`mcount`的指令再修改回来。对于没有打开trace的时候进行了很大的有话提升。
+静态的ftrace就是使用类似于`gcc -pg`的机制在函数头部插入`mcount`,就算什么也不做，直接`retq`也会有很大的消耗，作者`Steven Rostedt`说有13%的消耗，所以进化出了dynamic ftrace.
+最终的结果是:
+1.保存都是哪些位置可以进行`mcount`，最好在编译的时候就知道全部的位置
+2.在系统启动的时候所有的`mcount`全部替换成`nop`指令，这样消耗就非常小
+3.如何动态修改
+- 编译的时候收集所有可以`mcount`的信息
+1.通过`scripts/recordmcount.c`或者`scripts/recordmcount.pl`读取目标文件`.o`中所有的`mcount`,然后读取`relocation`表，计算出所有的地址，保存到目标文件的`__mcount_loc`section中
+![image](../images/recordmcount1.png)
+之后在连接的时候将所有目标文件中的`__mcount_loc`都放入到vmlinx中的`__start_mcount_loc->__stop_mcount_loc`
+```
+#ifdef CONFIG_FTRACE_MCOUNT_RECORD
+#define MCOUNT_REC()	. = ALIGN(8);				\
+			VMLINUX_SYMBOL(__start_mcount_loc) = .; \
+			*(__mcount_loc)				\
+			VMLINUX_SYMBOL(__stop_mcount_loc) = .;
+#else
+#define MCOUNT_REC()
+#endif
+```
+![image](../images/recordmcount2.png)
+![image](../images/recordmcount3.png)
+- 系统启动的时候替换成`nop`指令
+在系统启动的时候ftrace_process_locs把`__start_mcount_loc->__stop_mcount_loc`中的信息保存下来，然后根据地址将所有地址上的`call mcount`替换成`nop`
+- 如何动态trace
+在上一步中，我们申请了很多的`struct dyn_ftrace`保存了所有可以`mcount`的地址，在开启trace的时候做的事情和系统启动的时候做的工作是相似的，但是效果是相反的，将`nop`替换成`call function`。
+这一步和系统启动的时候还是有些不一样的，在boot阶段是单核启动，而此时多核已经启动，修改指令的操作不是原子操作，这就可能导致核1在修改代码，核2在执行这段代码然后看到了一些中间状态，之后可能就是指令异常，结果就是系统异常重启了。
+在这里我们借助breakpoint即`cc`,
 
 实现方式:
 
