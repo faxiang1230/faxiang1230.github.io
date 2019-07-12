@@ -301,6 +301,15 @@ CC_USING_FENTRY	:= $(call cc-option, -mfentry -DCC_USING_FENTRY)
 endif
 KBUILD_CFLAGS	+= -pg $(CC_USING_FENTRY)
 ```
+注册:
+```
+kernel/trace/trace_functions.c
+init_function_trace->register_tracer(&function_trace);
+```
+通过`echo function >current_tracer`使能当前的tracer
+```
+
+```
 链接时:
 运行时:
 ### function_graph
