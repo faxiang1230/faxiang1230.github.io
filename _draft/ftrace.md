@@ -365,12 +365,19 @@ END(function_hook)
 ```
 ![image](../images/recordmcount2.png)
 ![image](../images/recordmcount3.png)
+recordmcount的主要工作过程:编译出每个`.o`文件后，扫描对象中的可重定位表,可以根据`重定位表->符号表->函数名称`,扫描出所有调用`mcount`的位置，之后将他们收集到一起形成一个可重定位表，放到一个专门的section中，此时还是`__mcount_loc`和`.rela__mcount_loc`,其中`__mcount_loc`全是灌水的，而`.rela__mcount_loc`记录着在什么位置调用的`mcount`。随后会将所有的`.o`文件section全部聚合到一起，此时binutils会计算单个`.o`和总的`.o`中偏移关系，更新到`__mcount_loc`，它描述了所有调用mcount的位置。在链接阶段，会将`__mcount_loc`中的内容汇总到`.init`section中`__start_mcount_loc->__stop_mcount_loc`，存储成纯粹的数据，这样`__mcount_loc`在vmlinux中就消失了。不过在module中还是会存在的，当module加载的时候会加载`__mcount_loc`中的内容，具体怎么处理的看下一节。
+
 - 系统启动的时候替换成`nop`指令
-在系统启动的时候ftrace_process_locs把`__start_mcount_loc->__stop_mcount_loc`中的信息保存下来，然后根据地址将所有地址上的`call mcount`替换成`nop`
+在dynamic ftrace中,`mcount`的实现也非常简单，直接就`req`，占据一个字节。
+在系统启动的时候ftrace_process_locs把`__start_mcount_loc->__stop_mcount_loc`中的信息保存下来，然后根据地址将所有地址上的`call mcount`替换成`nop`。
+而在module加载的过程中，会将`__mcount_loc`读取到`ftrace_callsites`指向的内存中，在`ftrace_init`中注册了`module`的nofity,所以此时会接到时间通知，`ftrace_init_module`做的事情和系统启动时候是一样的，分配空间来存储`struct dyn_ftrace`并且将原始位置的指令替换成`nop`.
+
 - 如何动态trace
-在上一步中，我们申请了很多的`struct dyn_ftrace`保存了所有可以`mcount`的地址，在开启trace的时候做的事情和系统启动的时候做的工作是相似的，但是效果是相反的，将`nop`替换成`call function`。
+在上一步中，我们申请了很多的`struct dyn_ftrace`保存了所有调用`mcount`的地址，在开启trace的时候做的事情和系统启动的时候做的工作是相似的，但是效果是相反的，将`nop`替换成`call function`,具体实现看`__ftrace_replace_code`.
 这一步和系统启动的时候还是有些不一样的，在boot阶段是单核启动，而此时多核已经启动，修改指令的操作不是原子操作，这就可能导致核1在修改代码，核2在执行这段代码然后看到了一些中间状态，之后可能就是指令异常，结果就是系统异常重启了。
 在这里我们借助breakpoint即`cc`,
+
+疑问:`mcount`实现应该只是占据一个字节的指令，但是替换指令`call offset`总共占据5个字节的位置，什么地方使得`mcount`占据更多的位置?对齐?
 
 实现方式:
 
