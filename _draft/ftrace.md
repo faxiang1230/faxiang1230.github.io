@@ -342,6 +342,17 @@ END(function_hook)
 函数执行时保存寄存器到栈上，根据ip和parent_ip打印符号到ring buffer中，从栈上恢复寄存器。
 
 ### function_graph
+
+function_graph可以抓取函数内所有执行过的路径，并且打印各自执行的时间。这样除了进入function时有hook点，还需要在退出function有hook点。
+进入function时可以通过`mcount`来进行hook,退出时需要做一些额外的工作:
+
+1.在`task_struct`单独开辟了一个`struct ftrace_ret_stack *ret_stack`来保存每一个可以hook的状态，是一个数组，能够保存最多FTRACE_RETFUNC_DEPTH个entry，当做一个栈来操作.
+
+2.在`mcount`中能够获取栈帧的信息，在上一个帧的底部保存有返回地址，将返回地址替换成hook点，并且将返回地址保存到`current->ret_stack[index]`中，记录当前时间
+3.在函数返回时，跳转到hook，记录当前信息和时间戳，取出`current->ret_stack[index]`实际的返回地址跳转回正常流程。
+
+![image](../images/function-graph-trampoline.png)
+
 ## dynamic ftrace
 
 静态的ftrace就是使用类似于`gcc -pg`的机制在函数头部插入`mcount`,就算什么也不做，直接`retq`也会有很大的消耗，作者`Steven Rostedt`说有13%的消耗，所以进化出了dynamic ftrace.
@@ -365,6 +376,7 @@ END(function_hook)
 ```
 ![image](../images/recordmcount2.png)
 ![image](../images/recordmcount3.png)
+
 recordmcount的主要工作过程:编译出每个`.o`文件后，扫描对象中的可重定位表,可以根据`重定位表->符号表->函数名称`,扫描出所有调用`mcount`的位置，之后将他们收集到一起形成一个可重定位表，放到一个专门的section中，此时还是`__mcount_loc`和`.rela__mcount_loc`,其中`__mcount_loc`全是灌水的，而`.rela__mcount_loc`记录着在什么位置调用的`mcount`。随后会将所有的`.o`文件section全部聚合到一起，此时binutils会计算单个`.o`和总的`.o`中偏移关系，更新到`__mcount_loc`，它描述了所有调用mcount的位置。在链接阶段，会将`__mcount_loc`中的内容汇总到`.init`section中`__start_mcount_loc->__stop_mcount_loc`，存储成纯粹的数据，这样`__mcount_loc`在vmlinux中就消失了。不过在module中还是会存在的，当module加载的时候会加载`__mcount_loc`中的内容，具体怎么处理的看下一节。
 
 - 系统启动的时候替换成`nop`指令
@@ -522,6 +534,9 @@ Userspace dynamic events设置:
 uprobe_events
 uprobe_profile
 ```
+使用function_graph:
+1.测量函数执行时间，寻找影响性能和长延迟的位置
+2.观察函数执行路径，非常适合学习内核，找到异常的函数路径
 ## 参考
 https://www.ibm.com/developerworks/cn/linux/1609_houp_ftrace/  
 https://static.lwn.net/kerneldoc/trace/ftrace-uses.html  
