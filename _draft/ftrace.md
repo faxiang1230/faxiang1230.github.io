@@ -2,8 +2,11 @@
 首先trace是跟踪的意思，通常被运维或者性能优化的同学使用，用来跟踪系统的状态，从用户态程序到内核中的trace.
 和trace相似的有profile(剖析),profile通常是周期性查询cpu上的当前指令地址，而trace通常是在执行路径上埋桩,执行过程中输出采集。  
 
-ftrace是function trace的简称，linux中trace的代名词，代表的是一个trace体系框架,可以划分成这四个组件:  
+ftrace是function trace的简称，linux中trace的代名词，代表的是一个trace体系框架,可以划分成这四个组件:
+
 ![image](../images/ftrace-frame.png)  
+<center>图１．ftrace简图</center>  
+
 1.如何创建probe点  
 2.probe之后处理函数  
 3.probe中处理函数输出结果到ring buffer  
@@ -19,12 +22,17 @@ event tracing,function trace,dynamic ftrace,kprobe,uprobe
 ## tracepoint
 trace point有很长时间的历史了，在3.9以前在内核中还有`samples/tracepoint`的使用示例，但是自从ftrace发展很成熟之后就不再推荐使用了，所以这个示例也被mainline删除了。
 
-trace point就是开发人员手动地静态的在内核代码中插桩，之后可以向这个点注册处理函数。
-在module中，会将tracepoint放进`__tracepoints`section中,名称字符串放进去`__tracepoints_str`,在module加载的时候会解析`__tracepoints`section的内容；内核初始化的时候注册了module事件处理callback`tracepoint_module_nb`,然后将tracepoint信息放到一个hash表中维护。之后注册tracepoint的处理函数只是将处理函数加入到tracepoint上的函数指针数组上，一个tracepoint支持多个callback.在函数调用过程中检查是否有callback,逐个调用。
+trace point就是开发人员手动地静态的在内核代码中插桩，之后可以向这个点注册处理函数。<font color="#660000"> 一个插桩点是可以有多个处理函数，以数组存放。</font><br />
 
-### 代码片段示例:
+以module形式存在的驱动也可以使用tracepoint，编译阶段会将tracepoint放进`__tracepoints`section中,名称字符串放进去`__tracepoints_str`;
+在module加载的时候会解析`__tracepoints`section的内容,内核初始化的时候注册了module事件处理callback`tracepoint_module_nb`,然后将tracepoint信息放到一个hash表中维护。
+
+之后可以通过注册tracepoint的处理函数将处理函数加入到tracepoint上的函数指针数组上，一个tracepoint支持多个callback.在函数调用过程中检查是否有callback,逐个调用。
+
+### 代码片段示例
 预备工作的宏:
 ```
+include/linux/tracepoint.h
 #define DEFINE_TRACE_FN(name, reg, unreg)				\
 	static const char __tpstrtab_##name[]				\
 	__attribute__((section("__tracepoints_strings"))) = #name;	\
@@ -55,21 +63,24 @@ trace point就是开发人员手动地静态的在内核代码中插桩，之后
                return tracepoint_probe_unregister(#name, (void *)probe);\
        }
 ```
-使用上面定义的宏生成tracepoint相关的信息,DECLARE_TRACE宏展开之后就是:`register_trace_subsys_event`和`unregister_trace_subsys_event`和tracepoint的函数`trace_subsys_event`;而DEFINE_TRACE展开之后就是将tracepoint的信息：名字放入`__tracepoints_strings`section中，tracepoint放入`__tracpoints`中。如此在插桩的时候就是插入了以函数，注册时候就是向插桩的函数处注册callback.
+使用宏声明:
 ```
 DECLARE_TRACE(subsys_event,            //宏展开之后
-	TP_PROTO(struct inode *inode, struct file *file),
-	TP_ARGS(inode, file));
+ TP_PROTO(struct inode *inode, struct file *file),
+ TP_ARGS(inode, file));
 
 DEFINE_TRACE(subsys_event);
 static int my_open(struct inode *inode, struct file *file)
 {
-       int i;
+			 int i;
 
-       trace_subsys_event(inode, file);           //DEFINE展开之后就是trace_subsys_event函数
-       return -EPERM;
+			 trace_subsys_event(inode, file);           //DEFINE展开之后就是trace_subsys_event函数
+			 return -EPERM;
 }
 ```
+使用上面定义的宏生成tracepoint相关的信息,DECLARE_TRACE宏展开之后就是:`register_trace_subsys_event`和`unregister_trace_subsys_event`和tracepoint的函数`trace_subsys_event`;
+而DEFINE_TRACE展开之后就是将tracepoint的信息：名字放入`__tracepoints_strings`section中，tracepoint放入`__tracpoints`中。如此在插桩的时候就是插入了以函数，注册时候就是向插桩的函数处注册callback.
+
 注册tracepoint的callback:
 ```
 static void probe_subsys_event(void *ignore,
@@ -84,19 +95,30 @@ static void probe_subsys_event(void *ignore,
 }
 register_trace_subsys_event(probe_subsys_event, NULL);
 ```
+`register_trace_subsys_event`注册probe处理函数。
+
+通过整个过程，tracepoint使用不算复杂，但是通常需要两个module,一个声明tracepoint，一个注册tracepoint的callback;另外一个就是需要实现自己的callback.
+
 ## event trace
-使用 tracepoint 需要自己实现probe函数，而probe函数通常就是打印一些信息，每次都自己实现比较麻烦，而且还需要一个单独的内核模块来进行注册，不是很方便，所以在tracepoint上封装出了一个接口，probe函数采用固定的范式，根据tracepoint中组装成不同的probe函数，而probe函数的功能就是将信息输出到ring buffer中，这就是event trace做的最主要的工作。
+linux的车轮永远前进，tracepoint的使用不算复杂，但是内核开发人员想让trace更加简单，功能强大使用简单的背后是复杂的设计，永远没有免费的蛋糕。
 
-除此之外，另外一个很重大的改进是将具有相同类型的:`TP_PROTO, TP_ARGS, TP_STRUCT__entry`的都归到一个类下，一方面形成一种树状的结构访问，另外一方面能够共用生成的赋值函数，打印函数，并且共享相同的存储类型，这样大大复用代码，减少了整个镜像的大小。  
+使用 tracepoint 需要自己实现probe函数，而probe函数我们通常就是打印一些信息，每次都自己实现比较麻烦，而且还需要一个单独的内核模块来进行注册，不是很方便，所以在tracepoint上封装出了一个接口，probe函数采用固定的范式，根据tracepoint中组装成不同的probe函数，而probe函数的功能就是将信息输出到ring buffer中，这就是event trace做的最主要的工作。
 
-event trace接口虽然抽象的比较好，但由于它本身的复杂性使用起来仍然是比较复杂，所以使用起来仍然比较复杂，[lwn上专门有三篇文章](https://lwn.net/Articles/379903/)来讲解怎么使用它的.第一章将基础的event trace使用，第二篇将如何将相似的event trace使用class封装成一个模板来减少代码生成和复用，第三篇讲解如何在module中使用event trace.推荐自行阅读。
+除此之外，另外一个很重大的改进是将具有相同类型的:`TP_PROTO, TP_ARGS, TP_STRUCT__entry`的都归到一个类下，一方面形成一种树状的结构访问，有了结构就有了秩序和规律;另外一方面能够共用生成的赋值函数，打印函数，并且共享相同的存储类型，这样大大复用代码，减少了整个镜像的大小。  
+
+event trace接口虽然抽象的比较好，但由于它本身的复杂性使用起来仍然是比较复杂，[lwn上专门有三篇文章](https://lwn.net/Articles/379903/)来讲解怎么添加一个event trace.
+第一章将基础的event trace使用，
+第二篇将如何将相似的event trace使用class封装成一个模板来减少代码生成和复用，
+第三篇讲解如何在module中使用event trace.作者写的通俗易懂,推荐自行阅读。
 
 目前tracepoint直接使用的已经非常少了，都是使用的在tracepoint上封装的event trace接口。
 
 下面是根据`samples/trace_events/trace-events-sample.h`中的示例来查看一个trace event是怎么生成的。
 
-*Tips*:  
-自己可以写个简单的demo module看看，使用`EXTRA_CFLAGS='-save-temps'`保存预处理文件`.i`,之后就能在`/usr/lib/modules/$(uname -r)/build/{your_modulename.i}`中看到都生成了哪些代码。如果报错，找不到`your_modulename.h`,把它拷贝到`/usr/lib/modules/$(uname -r)/build/include/trace/`下。
+**Tips**:  
+自己可以写个简单的demo module看看，使用`EXTRA_CFLAGS='-save-temps'`保存预处理文件`.i`,
+之后就能在`/usr/lib/modules/$(uname -r)/build/{your_modulename.i}`中看到都生成了哪些代码。
+如果报错，找不到`your_modulename.h`,把它拷贝到`/usr/lib/modules/$(uname -r)/build/include/trace/`下。
 ```
 make -C /usr/lib/modules/$(shell uname -r)/build M=$(shell pwd) modules EXTRA_CFLAGS='-save-temps'
 ```
@@ -140,9 +162,9 @@ TRACE_EVENT(foo_bar,
 ```
 TRACE_EVENT 被定义成 DECLARE_TRACE ，而 DECLARE_TRACE 正是tracepoint需要的两个宏当中的一个，这里可以看到 event_tracing 确实是建立在 tracepoint 上的。
 
-这个 TRACE_EVENT 宏已经被替换了，内核接下来会再次包含这个头文件，然后重新定义这个宏，以便把这个宏再展开成其它的代码，一个头文件再包含自己，这样不是形成一个死循环了么，事实上内核开发者使用一些标志巧妙的避开了这样的错误。TRACE_EVENT 在整个预编译过程中要被重新定义很多次，然后重新包含这个头文件，从而产成不同的需要的代码。这种宏虽然复杂，也不直观，但是它减少了代码的重复。试想，内核中也很多很多 event tracing，如果每一个子系统的定义自己的，那会产生多少类似的代码实现类似的功能。
+这个 `TRACE_EVENT` 宏已经被替换了，内核接下来会再次包含这个头文件，然后重新定义这个宏，以便把这个宏再展开成其它的代码，一个头文件再包含自己，这样不是形成一个死循环了么，事实上内核开发者使用一些标志巧妙的避开了这样的错误。TRACE_EVENT 在整个预编译过程中要被重新定义很多次，然后重新包含这个头文件，从而产成不同的需要的代码。这种宏虽然复杂，也不直观，但是它减少了代码的重复。试想，内核中也很多很多 `event tracing`，如果每一个子系统的定义自己的，那会产生多少类似的代码实现类似的功能。
 
-第二次包含这个头文件，接下来会从新定义 TRACE_EVENT，以便产生其它代码。这是在 include/trace/define_trace.h，如下.
+第二次包含这个头文件，接下来会从新定义 `TRACE_EVENT`，以便产生其它代码。这是在`include/trace/define_trace.h`，如下.
 
 - 3.实现 tracepoint（续）
 
@@ -218,7 +240,7 @@ static void ftrace_raw_event_foo_bar (char *foo, int bar)
 ```
 
 ## tracer
-Tracer有很多种，主要几大类:
+ftrace的Tracer有很多种，主要几大类:
 ```
 函数类：function， function_graph， stack
 延时类：irqsoff， preemptoff， preemptirqsoff， wakeup， wakeup_rt， waktup_dl
@@ -253,21 +275,31 @@ Kernel memory tracer: 内存 tracer 主要用来跟踪 slab allocator 的分配�
 Workqueue statistical tracer：这是一个 statistic tracer，统计系统中所有的 workqueue 的工作情况，比如有多少个 work 被插入 workqueue，多少个已经被执行等。开发人员可以以此来决定具体的 workqueue 实现，比如是使用 single threaded workqueue 还是 per cpu workqueue.
 
 Event tracer: 跟踪系统事件，比如 timer，系统调用，中断等。
+
 ### nop
+
 nop tracer并没有实质性的处理，被用来停止其他的tracer，它也通常作为默认的tracer在初始化时设置的。设置nop的时候就可以打开trace event了，其他的tracer都和trace event冲突。
 ### function
 function tracer实现的基本原理就是`gcc -pg`,在所有函数的头部插入`mcount`,而它只是个插桩.由于mcount不能记录参数，现在都是使用的`fentry`,可以使用`gcc -pg -mfentry`来插入(gcc 4.6之后才有的新功能)。所以我们在内核中是找不到`mcount`和`fentry`的实现的，它是由`gcc`来完成的。它插入的是什么呢?
-![image](../images/fentry-without-dynamic.png)
 
+![image](../images/fentry-without-dynamic.png)
+但是这个可不是我们通常在gcc中见到的`mcount/fentry`,内核是怎么将gcc的实现替换的呢?
 
 - 内核怎么替换`gcc`的`mcount/fentry`的呢？
-使用`gcc -pg`时，会在编译阶段就插入`call mcount`,可以使用`gcc -S`来验证一下，而真正链接的时候只要保证能够优先链接到arch自己实现的函数就好了。在gcc中有一种可以声明为`weak`的，它在链接的时候优先级要低很多，可以查看`glibc`中的`mcount`声明`weak_alias (_mcount, mcount)`,所以在编译的时候就插入内核实现的`mcount`了.  
-另外一种方式可以验证这个猜想，在自己的代码中实现`mcount`,通过最后的反汇编来验证是否是自己的`mcount`.
+
+使用`gcc -pg`时，会在编译阶段就插入`call mcount`,链接的时候才会去找其实现，所以内核在这一部分实现的方式是在真正链接的时候链接到arch自己实现的函数。
+在gcc中有一种可以声明为`weak`的，它在链接的时候优先级要低很多，可以查看`glibc`中的`mcount`声明:`weak_alias (_mcount, mcount)`,
+所以在声明内核实现的`mcount`之后就能链接到内核的实现了.
+
+(另外一种方式可以验证这个猜想，在自己的代码中实现`mcount`,通过最后的反汇编来验证是否是自己的`mcount`.)
 
 - 插桩的用途做什么
-在上图中的反汇编其实就是在`entry64.S/mcount.S/ftrace_64.S`中实现的函数，不管在哪个文件中，干得活可以用下面的伪代码来表示:
-在其中会检查是否设置了`ftrace_trace_function`,如果没有设置的话,`ftrace_trace_function`就是指向一个`ftrace_stub`,那么直接返回。而如果设置了，执行`ftrace_trace_function`.原理非常简单，只是其中的实现依赖于架构相关，伪代码如下:
 
+在上图中的反汇编其实就是在`entry64.S/mcount.S/ftrace_64.S`中实现的函数，不管在哪个文件中，干得活可以用下面的伪代码来表示:
+
+在其中会检查是否设置了`ftrace_trace_function`,如果没有设置的话,`ftrace_trace_function`就是指向一个`ftrace_stub`,那么直接返回。
+而如果设置了，执行`ftrace_trace_function`.原理非常简单，只是其中的实现依赖于架构相关.
+伪代码如下:
 ```
 void ftrace_stub(void)
 {
@@ -349,6 +381,7 @@ function_graph可以抓取函数内所有执行过的路径，并且打印各自
 1.在`task_struct`单独开辟了一个`struct ftrace_ret_stack *ret_stack`来保存每一个可以hook的状态，是一个数组，能够保存最多FTRACE_RETFUNC_DEPTH个entry，当做一个栈来操作.
 
 2.在`mcount`中能够获取栈帧的信息，在上一个帧的底部保存有返回地址，将返回地址替换成hook点，并且将返回地址保存到`current->ret_stack[index]`中，记录当前时间
+
 3.在函数返回时，跳转到hook，记录当前信息和时间戳，取出`current->ret_stack[index]`实际的返回地址跳转回正常流程。
 
 ![image](../images/function-graph-trampoline.png)
@@ -356,13 +389,21 @@ function_graph可以抓取函数内所有执行过的路径，并且打印各自
 ## dynamic ftrace
 
 静态的ftrace就是使用类似于`gcc -pg`的机制在函数头部插入`mcount`,就算什么也不做，直接`retq`也会有很大的消耗，作者`Steven Rostedt`说有13%的消耗，所以进化出了dynamic ftrace.
-最终的结果是:
+
+实现dynamic ftrace的基本工作:
+
 1.保存都是哪些位置可以进行`mcount`，最好在编译的时候就知道全部的位置
+
 2.在系统启动的时候所有的`mcount`全部替换成`nop`指令，这样消耗就非常小
+
 3.如何动态修改
+
 - 编译的时候收集所有可以`mcount`的信息
-1.通过`scripts/recordmcount.c`或者`scripts/recordmcount.pl`读取目标文件`.o`中所有的`mcount`,然后读取`relocation`表，计算出所有的地址，保存到目标文件的`__mcount_loc`section中
+
+1.通过`scripts/recordmcount.c`或者`scripts/recordmcount.pl`读取目标文件`.o`中所有调用`mcount`的位置,通过读取`relocation`表，计算出所有调用它的地址，保存到目标文件的`__mcount_loc`section中.而`mcount`的实现基本为空，通过类似于`nop`的指令来占位。
+
 ![image](../images/recordmcount1.png)
+
 之后在连接的时候将所有目标文件中的`__mcount_loc`都放入到vmlinx中的`__start_mcount_loc->__stop_mcount_loc`
 ```
 #ifdef CONFIG_FTRACE_MCOUNT_RECORD
@@ -375,16 +416,21 @@ function_graph可以抓取函数内所有执行过的路径，并且打印各自
 #endif
 ```
 ![image](../images/recordmcount2.png)
+
 ![image](../images/recordmcount3.png)
 
 recordmcount的主要工作过程:编译出每个`.o`文件后，扫描对象中的可重定位表,可以根据`重定位表->符号表->函数名称`,扫描出所有调用`mcount`的位置，之后将他们收集到一起形成一个可重定位表，放到一个专门的section中，此时还是`__mcount_loc`和`.rela__mcount_loc`,其中`__mcount_loc`全是灌水的，而`.rela__mcount_loc`记录着在什么位置调用的`mcount`。随后会将所有的`.o`文件section全部聚合到一起，此时binutils会计算单个`.o`和总的`.o`中偏移关系，更新到`__mcount_loc`，它描述了所有调用mcount的位置。在链接阶段，会将`__mcount_loc`中的内容汇总到`.init`section中`__start_mcount_loc->__stop_mcount_loc`，存储成纯粹的数据，这样`__mcount_loc`在vmlinux中就消失了。不过在module中还是会存在的，当module加载的时候会加载`__mcount_loc`中的内容，具体怎么处理的看下一节。
 
 - 系统启动的时候替换成`nop`指令
-在dynamic ftrace中,`mcount`的实现也非常简单，直接就`req`，占据一个字节。
-在系统启动的时候ftrace_process_locs把`__start_mcount_loc->__stop_mcount_loc`中的信息保存下来，然后根据地址将所有地址上的`call mcount`替换成`nop`。
-而在module加载的过程中，会将`__mcount_loc`读取到`ftrace_callsites`指向的内存中，在`ftrace_init`中注册了`module`的nofity,所以此时会接到时间通知，`ftrace_init_module`做的事情和系统启动时候是一样的，分配空间来存储`struct dyn_ftrace`并且将原始位置的指令替换成`nop`.
+
+在dynamic ftrace中,`mcount`的实现也非常简单，直接就`retq`，占据一个字节。
+
+在系统启动的时候ftrace_process_locs把`__start_mcount_loc->__stop_mcount_loc`中的信息保存下来，然后根据地址将所有地址上的`call mcount`替换成`nop`。  
+而在module加载的过程中，会将`__mcount_loc`读取到`ftrace_callsites`指向的内存中，在`ftrace_init`中注册了`module`的nofity,所以此时会接到时间通知，
+`ftrace_init_module`做的事情和系统启动时候是一样的，分配空间来存储`struct dyn_ftrace`并且将原始位置的指令替换成`nop`.
 
 - 如何动态trace
+
 在上一步中，我们申请了很多的`struct dyn_ftrace`保存了所有调用`mcount`的地址，在开启trace的时候做的事情和系统启动的时候做的工作是相似的，但是效果是相反的，将`nop`替换成`call function`,具体实现看`__ftrace_replace_code`.
 这一步和系统启动的时候还是有些不一样的，在boot阶段是单核启动，而此时多核已经启动，修改指令的操作不是原子操作，这就可能导致核1在修改代码，核2在执行这段代码然后看到了一些中间状态，之后可能就是指令异常，结果就是系统异常重启了。
 在这里我们借助breakpoint即`cc`,
@@ -394,63 +440,29 @@ recordmcount的主要工作过程:编译出每个`.o`文件后，扫描对象中
 实现方式:
 
 - 1.编译的时候，将所有function的`mcount`地址汇聚到一个代码段中，起始地址`__stop_mcount_loc`到结束地址`__start_mcount_loc`
+
 - 2.系统初始化的时候，为每一个`mcount`地址都分配一个`struct dyn_ftrace`,保存着名称和地址，将地址中的`mcount`替换为`nop`指令;
 	对于module,注册module notify,当module插入的时候动态分配`struct dyn_ftrace`来保存其地址信息。在module卸载的时候删除其信息。
+
 - 3.在激活的时候，再将`mcount`恢复到函数原始的代码位置，检查是那种trace function.
 
 ![image](../images/ftrace-with-dynamic.png)
 
 ## kprobe
-kprobe 是很早前就存在于内核中的一种动态 trace 工具。kprobe 本身利用了 int 3（在 x86 中）实现了 probe 点，这对应于 A 部分的功能。使用 kprobe 需要用户自己实现 kernel module 来注册 probe 函数。可以看出 kprobe 并没有统一的 B、C 和 D。使用起来用户需要自己实现很多东西。不是很灵活。而在 function trace 出现后，kprobe 借用了它的一部分设计模式，实现了统一的 probe 函数（对应于图中的 B），并利用了 function trace 的环形缓存和用户接口部分，也就是 C 和 D 部分功能，用户可以使用读写 debugfs 中相关文件就可以控制 kprobe 的注册注销以及读取结果，非常方便。
+
+kprobe 是很早前就存在于内核中的一种动态 trace 工具。kprobe 本身利用了`int 3`（在 x86 中）实现了 probe 点，这对应于 A 部分的功能。使用 kprobe 需要用户自己实现 kernel module 来注册 probe 函数。可以看出 kprobe 并没有统一的 B、C 和 D。使用起来用户需要自己实现很多东西。不是很灵活。而在 function trace 出现后，kprobe 借用了它的一部分设计模式，实现了统一的 probe 函数（对应于图中的 B），并利用了 function trace 的环形缓存和用户接口部分，也就是 C 和 D 部分功能，用户可以使用读写 debugfs 中相关文件就可以控制 kprobe 的注册注销以及读取结果，非常方便。
+
+详细看一下:https://www.cnblogs.com/honpey/p/4575902.html
+
 ## uprobe
-## ringbuffer
-## trace-cmd
+uprobe的实现原理和kprobe一样都是利用调试指令`int 3`,将`int 3`指令放在可执行文件的offset上，执行到的时候就能截获，找到对应的callback位置，然后继续执行。就不在赘述了。
+
 ## 问题
 ### 使用function_graph tracer崩溃问题
 ```
 echo "function_graph" > /sys/kernel/debug/tracing/current_tracer
 ```
-在上面的echo语句导致崩溃之后重启重启,使用kdump抓不到任何的crash.在vmware中报
-
-   清除孤立的inode <inode>
-
-我试图重现这个问题，将函数的current_tracer值replace成C程序中的其他东西：
-```
-include <stdio.h>                                                                 
-#include <fcntl.h>                                                                 
-#include <unistd.h>                                                                
-#include <string.h>                                                                
-#include <stdlib.h>                                                                
-int openCurrentTracer() {                                                          
-    int fd = open("/sys/kernel/debug/tracing/current_tracer", O_WRONLY);           
-    if(fd < 0) exit(1); return fd;                                                 
-}                                                                                  
-int writeTracer(int fd, char* tracer) {                                            
-    if(write(fd, tracer, strlen(tracer)) != strlen(tracer)) {                      
-        printf("Failure writing %s\n", tracer); return 0;                          
-    } return 1;                                                                    
-}                                                                                  
-int main(int argc, char* argv[]) {                                                 
-    int fd = openCurrentTracer();                                                  
-    char* blockTracer = "blk";                                                     
-    if(!writeTracer(fd, blockTracer)) return 1; close(fd);                         
-    fd = openCurrentTracer();                                                      
-    char* graphTracer = "function_graph";                                          
-    if(!writeTracer(fd, graphTracer))                                              
-        return 1;                                                                  
-    close(fd);                                                                     
-    printf("Preparing to fail!\n");                                                
-    fd = openCurrentTracer();                                                      
-    if(!writeTracer(fd, blockTracer)) return 1;                                    
-    close(fd);                                                                     
-    return 0;                                                                      
-}
-```
-奇怪的是，C程序不会崩溃我的系统。
-
-我最初在使用Ubuntu（Unity环境）16.04 LTS时遇到了这个问题，并确认它是4.4.0和4.5.5内核中的一个问题。 我也在运行Ubuntu（Mate环境）15.10，在4.2.0和4.5.5内核上的机器上testing过这个问题，但是无法重现这个问题。 这只会让我更加困惑。
-
-任何人都可以给我洞察发生了什么？ 具体来说，为什么我能够`write()`但不能`echo /sys/kernel/debug/tracing/ current_tracer`？
+在上面的echo语句导致崩溃之后重启重启,使用kdump抓不到任何的crash.
 
 **更新**
 
@@ -534,9 +546,12 @@ Userspace dynamic events设置:
 uprobe_events
 uprobe_profile
 ```
-使用function_graph:
+### 使用function_graph用途
+
 1.测量函数执行时间，寻找影响性能和长延迟的位置
+
 2.观察函数执行路径，非常适合学习内核，找到异常的函数路径
+
 ## 参考
 https://www.ibm.com/developerworks/cn/linux/1609_houp_ftrace/  
 https://static.lwn.net/kerneldoc/trace/ftrace-uses.html  
