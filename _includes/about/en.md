@@ -1,12 +1,12 @@
 # About Me
-  **Name:** Jianxing.Wang
+  **Name:** Frank.Wang
 
-  **Job:** Android System engineer
+  **Job:** IT engineer
 
   **work years：** 4
 
-  **Love:** Play Games,like LOL,CF
+  **Love:** Reading, Sleeping
 
-  **job skills:** Android,kernel,repo,git,shell,Power,Stability,framework
+  **job skills:** Android,kernel,repo,git,shell,Power,Stability,framework,RISCV, LoongArch, KVM, linux kernel, security, IC design/verification
 
   **shorten：** No talkative
